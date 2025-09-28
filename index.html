@@ -6,7 +6,8 @@
   <title>G-Wagen Interior Tool (MVP)</title>
   <style>
     :root{--bg:#0f1115;--panel:#171a21;--text:#e6e6e6;--sub:#9aa4b2;--accent:#4da3ff}
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
     header{padding:14px 18px;border-bottom:1px solid #252a33;display:flex;gap:10px;align-items:center}
     header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.3px}
     .wrap{display:flex;gap:16px;padding:16px}
@@ -19,7 +20,9 @@
     .btn:hover{border-color:#3a465a}.btn.accent{background:var(--accent);border-color:#67b0ff;color:#081321}
     .btn.ghost{background:transparent;border:1px dashed #3a465a;color:#bcd2ff}
     .frame{position:relative;flex:1;margin-top:12px;background:#0a0d12;border:1px solid #222833;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center}
-    canvas{max-width:100%;max-height:100%;image-rendering:auto}
+    /* ВАЖЛИВО: канваси накладаються один на один */
+    .stack{position:relative;width:100%;height:100%}
+    .stack canvas{position:absolute;inset:0;max-width:100%;max-height:100%;image-rendering:auto}
     .note{font-size:12px;color:#94a3b8;margin-top:6px}
     .row{display:flex;gap:8px;align-items:center;margin:8px 0}
     select,input[type="color"],input[type="range"],input[type="number"]{background:#0f1320;color:#e6e6e6;border:1px solid #2a3240;border-radius:8px;padding:6px 8px}
@@ -63,7 +66,7 @@
       <div class="group"><label class="small">Толерантність</label><input id="tol" type="range" min="5" max="40" value="14"></div>
       <button id="refine" class="btn">Уточнити маску (Auto)</button>
       <button id="clear" class="btn ghost">Очистити маску</button>
-      <div class="group"><label><input id="showMask" type="checkbox"> Показати маску</label></div>
+      <div class="group"><label><input id="showMask" type="checkbox" checked> Показати маску</label></div>
     </div>
 
     <div class="frame">
@@ -73,13 +76,10 @@
         <canvas id="mask"></canvas>
       </div>
     </div>
-    <div class="note">Як користуватись: 1) Завантаж фото. 2) Вибери “Клік (Magic)” і натисни по потрібному елементу — маска зʼявиться. 3) Дорисуй Пензликом/Гумкою. 4) Натисни “Уточнити маску (Auto)”. 5) Застосуй колір/матеріал справа.</div>
+    <div class="note">Кроки: 1) Завантаж фото. 2) “Клік (Magic)” і клацни по деталі — зʼявиться маска. 3) Пензлик/Гумка — підправ. 4) “Уточнити маску (Auto)”. 5) Праворуч обери колір/матеріал і натисни “Застосувати”.</div>
   </div>
 
   <div class="right">
-    <div class="sec-title">Підігнати шаблон (опц.)</div>
-    <div class="row small">Можеш спершу накинути грубу маску: натисни в 2-3 місця на деталі (Magic), потім “Уточнити”.</div>
-
     <div class="sec-title">Колір та матеріал</div>
     <div class="row"><span class="small">Колір</span><input id="color" type="color" value="#b72828"></div>
     <div class="row"><span class="small">Інтенсивність</span><input id="intensity" type="range" min="0" max="100" value="65"></div>
@@ -101,12 +101,11 @@
       <button id="apply" class="btn accent">Застосувати до деталі</button>
       <button id="save" class="btn">ОК (зберегти приклад)</button>
     </div>
-    <div id="saved" class="ok">Збережено ✅ (це навчить AI у наступних версіях)</div>
+    <div id="saved" class="ok">Збережено ✅</div>
   </div>
 </div>
 
 <script>
-  // ==== Канваси ====
   const photo = document.getElementById('photo');
   const render = document.getElementById('render');
   const mask = document.getElementById('mask');
@@ -114,7 +113,6 @@
   const rctx = render.getContext('2d');
   const mctx = mask.getContext('2d');
 
-  // ==== UI ====
   const file = document.getElementById('file');
   const toolRadios = [...document.querySelectorAll('input[name="tool"]')];
   const brush = document.getElementById('brush');
@@ -132,73 +130,63 @@
   const saveBtn = document.getElementById('save');
   const saved = document.getElementById('saved');
 
-  let hasImage = false, drawing = false, curTool = 'magic';
+  let hasImage=false, drawing=false, curTool='magic';
 
   function resizeCanvases(w,h){
-    [photo, render, mask].forEach(c => { c.width = w; c.height = h; });
-    mctx.clearRect(0,0,mask.width, mask.height);
-    rctx.clearRect(0,0,render.width, render.height);
+    // Розмір контейнера — за фотоканвасом (інші ляжуть поверх завдяки absolute/inset:0)
+    [photo, render, mask].forEach(c=>{ c.width=w; c.height=h; });
+    mctx.clearRect(0,0,w,h);
+    rctx.clearRect(0,0,w,h);
   }
 
   // Завантаж фото
   file.addEventListener('change', e=>{
-    const f = e.target.files[0]; if(!f) return;
-    const url = URL.createObjectURL(f);
-    const img = new Image();
-    img.onload = ()=>{
-      let w = img.naturalWidth, h = img.naturalHeight;
-      const ms = 1400, m = Math.max(w,h);
-      if(m>ms){ const s = ms/m; w=Math.round(w*s); h=Math.round(h*s); }
+    const f=e.target.files[0]; if(!f) return;
+    const url=URL.createObjectURL(f);
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.naturalWidth, h=img.naturalHeight;
+      const ms=1400, m=Math.max(w,h);
+      if(m>ms){ const s=ms/m; w=Math.round(w*s); h=Math.round(h*s); }
       resizeCanvases(w,h);
       pctx.drawImage(img,0,0,w,h);
-      hasImage = true;
+      hasImage=true;
       drawPreview();
     };
-    img.src = url;
+    img.src=url;
   });
 
-  // Який інструмент
   toolRadios.forEach(r=> r.addEventListener('change', ()=>{
     curTool = toolRadios.find(x=>x.checked).value;
   }));
 
-  // Допоміжне: координати кліку в системі канваса
   function getPos(evt, canvas){
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    return {
-      x: Math.round((evt.clientX - rect.left) * scaleX),
-      y: Math.round((evt.clientY - rect.top) * scaleY)
-    };
+    const rect=canvas.getBoundingClientRect();
+    const scaleX=canvas.width/rect.width;
+    const scaleY=canvas.height/rect.height;
+    return { x:Math.round((evt.clientX-rect.left)*scaleX), y:Math.round((evt.clientY-rect.top)*scaleY) };
   }
 
-  // Малювання пензлем/гумкою по масці
   mask.addEventListener('pointerdown', e=>{
     if(!hasImage) return;
-    const pos = getPos(e, mask);
-    if(curTool === 'magic'){
-      magicFillAt(pos.x, pos.y, parseInt(tol.value,10)).then(()=>{ drawPreview(); });
-      return;
-    }
-    drawing = true;
-    drawDot(pos.x, pos.y);
+    const pos=getPos(e, mask);
+    if(curTool==='magic'){ magicFillAt(pos.x,pos.y,parseInt(tol.value,10)).then(drawPreview); return; }
+    drawing=true; drawDot(pos.x,pos.y);
   });
   mask.addEventListener('pointermove', e=>{
-    if(!drawing || !hasImage) return;
-    const pos = getPos(e, mask);
-    drawDot(pos.x, pos.y);
+    if(!drawing||!hasImage) return;
+    const pos=getPos(e, mask); drawDot(pos.x,pos.y);
   });
   ['pointerup','pointerleave','pointercancel'].forEach(ev=>{
-    mask.addEventListener(ev, ()=>{ drawing=false; applyIfAuto(); });
+    mask.addEventListener(ev, ()=>{ drawing=false; drawPreview(); });
   });
 
   function drawDot(x,y){
-    const b = parseInt(brush.value,10);
-    mctx.globalCompositeOperation = (curTool==='eraser') ? 'destination-out' : 'source-over';
-    mctx.fillStyle = 'rgba(255,255,255,1)';
+    const b=parseInt(brush.value,10);
+    mctx.globalCompositeOperation=(curTool==='eraser')?'destination-out':'source-over';
+    mctx.fillStyle='rgba(255,255,255,1)';
     mctx.beginPath(); mctx.arc(x,y,b/2,0,Math.PI*2); mctx.fill();
-    mctx.globalCompositeOperation = 'source-over';
+    mctx.globalCompositeOperation='source-over';
     drawPreview();
   }
 
@@ -209,99 +197,62 @@
 
   showMask.addEventListener('change', drawPreview);
 
-  // ========== MAGIC FILL (edge-aware flood fill з OpenCV.js) ==========
-  async function magicFillAt(x, y, tolerance=14){
+  // ==== Magic Fill (OpenCV floodFill) ====
+  async function magicFillAt(x,y,tolerance=14){
     await window.cvReady;
-    const w = photo.width, h = photo.height;
+    const w=photo.width,h=photo.height;
+    const src=cv.imread(photo); cv.cvtColor(src,src,cv.COLOR_RGBA2RGB);
 
-    const src = cv.imread(photo);  // RGBA->RGB
-    cv.cvtColor(src, src, cv.COLOR_RGBA2RGB);
+    const ffMask=new cv.Mat.zeros(h+2,w+2,cv.CV_8UC1);
+    const lo=new cv.Scalar(tolerance,tolerance,tolerance,0);
+    const hi=new cv.Scalar(tolerance,tolerance,tolerance,0);
+    const seed=new cv.Point(x,y);
+    const dst=new cv.Mat(); src.copyTo(dst);
+    cv.floodFill(dst,ffMask,seed,new cv.Scalar(255,255,255,255),new cv.Rect(),lo,hi,(4|(255<<8)));
 
-    // Маска для floodFill (на 2 пікселі більше)
-    const ffMask = new cv.Mat.zeros(h+2, w+2, cv.CV_8UC1);
-    const lo = new cv.Scalar(tolerance,tolerance,tolerance,0);
-    const hi = new cv.Scalar(tolerance,tolerance,tolerance,0);
-    const seed = new cv.Point(x,y);
+    const region=new cv.Mat(h,w,cv.CV_8UC1);
+    for(let r=0;r<h;r++) for(let c=0;c<w;c++) region.ucharPtr(r,c)[0]=ffMask.ucharPtr(r+1,c+1)[0]?255:0;
+    const kernel=cv.Mat.ones(3,3,cv.CV_8U); cv.erode(region,region,kernel);
 
-    const dst = new cv.Mat();
-    src.copyTo(dst);
-    cv.floodFill(dst, ffMask, seed, new cv.Scalar(255,255,255,255),
-                 new cv.Rect(), lo, hi, (4 | (255<<8)));
-
-    // Переносимо область у бінарну маску
-    const region = new cv.Mat(h, w, cv.CV_8UC1);
-    for(let r=0; r<h; r++){
-      for(let c=0; c<w; c++){
-        region.ucharPtr(r,c)[0] = ffMask.ucharPtr(r+1,c+1)[0] ? 255 : 0;
-      }
-    }
-    // трохи ерозії — щоб не лізла за краї
-    const kernel = cv.Mat.ones(3,3,cv.CV_8U);
-    cv.erode(region, region, kernel);
-
-    // додати в маску (альфа)
-    const mImg = mctx.getImageData(0,0,w,h);
-    for(let i=0, j=0; j<region.data.length; i+=4, j++){
-      const add = region.data[j];
-      const a = mImg.data[i+3];
-      mImg.data[i] = 255; mImg.data[i+1]=255; mImg.data[i+2]=255;
-      mImg.data[i+3] = Math.max(a, add);
+    const mImg=mctx.getImageData(0,0,w,h);
+    for(let i=0,j=0;j<region.data.length;i+=4,j++){
+      const add=region.data[j], a=mImg.data[i+3];
+      mImg.data[i]=255; mImg.data[i+1]=255; mImg.data[i+2]=255; mImg.data[i+3]=Math.max(a,add);
     }
     mctx.putImageData(mImg,0,0);
 
-    // прибирання
     src.delete(); dst.delete(); ffMask.delete(); region.delete(); kernel.delete();
   }
 
-  // ========== Уточнення країв (GrabCut) ==========
+  // ==== Уточнення (GrabCut) ====
   async function refineMaskClient(){
     await window.cvReady;
-    const w = photo.width, h = photo.height;
-    const src = cv.imread(photo); cv.cvtColor(src, src, cv.COLOR_RGBA2RGB);
+    const w=photo.width,h=photo.height;
+    const src=cv.imread(photo); cv.cvtColor(src,src,cv.COLOR_RGBA2RGB);
 
-    // беремо поточну альфа-маску
-    const maskImg = mctx.getImageData(0,0,w,h);
-    const gcMask = new cv.Mat(h, w, cv.CV_8UC1);
-    for(let i=0, j=0; j<w*h; i+=4, j++){
-      const a = maskImg.data[i+3];
-      gcMask.data[j] = a>0 ? 3 : 2; // 3 = ймовірний передній план, 2 = ймовірний фон
-    }
-    const bg = new cv.Mat(), fg = new cv.Mat();
-    const rect = new cv.Rect(0,0,w,h);
-    cv.grabCut(src, gcMask, rect, bg, fg, 5, cv.GC_INIT_WITH_MASK);
+    const maskImg=mctx.getImageData(0,0,w,h);
+    const gcMask=new cv.Mat(h,w,cv.CV_8UC1);
+    for(let i=0,j=0;j<w*h;i+=4,j++){ const a=maskImg.data[i+3]; gcMask.data[j]=a>0?3:2; }
+    const bg=new cv.Mat(), fg=new cv.Mat(); const rect=new cv.Rect(0,0,w,h);
+    cv.grabCut(src,gcMask,rect,bg,fg,5,cv.GC_INIT_WITH_MASK);
 
-    // отримати бінарну маску
-    const result = new cv.Mat(h,w,cv.CV_8UC1);
-    for(let j=0; j<w*h; j++){
-      const v = gcMask.data[j];
-      result.data[j] = (v===1 || v===3) ? 255 : 0;
-    }
-    const kernel = cv.Mat.ones(3,3,cv.CV_8U);
-    cv.morphologyEx(result, result, cv.MORPH_CLOSE, kernel);
+    const result=new cv.Mat(h,w,cv.CV_8UC1);
+    for(let j=0;j<w*h;j++){ const v=gcMask.data[j]; result.data[j]=(v===1||v===3)?255:0; }
+    const kernel=cv.Mat.ones(3,3,cv.CV_8U); cv.morphologyEx(result,result,cv.MORPH_CLOSE,kernel);
 
-    // покласти назад в маску (альфа)
-    const out = mctx.createImageData(w,h);
-    for(let i=0, j=0; j<w*h; i+=4, j++){
-      out.data[i]=255; out.data[i+1]=255; out.data[i+2]=255; out.data[i+3]=result.data[j];
-    }
+    const out=mctx.createImageData(w,h);
+    for(let i=0,j=0;j<w*h;i+=4,j++){ out.data[i]=255; out.data[i+1]=255; out.data[i+2]=255; out.data[i+3]=result.data[j]; }
     mctx.putImageData(out,0,0);
 
-    // clean
     src.delete(); gcMask.delete(); bg.delete(); fg.delete(); result.delete(); kernel.delete();
   }
+  document.getElementById('refine').addEventListener('click', ()=>{ if(hasImage) refineMaskClient().then(drawPreview); });
 
-  refineBtn.addEventListener('click', async ()=>{
-    if(!hasImage) return;
-    refineMaskClient().then(()=> drawPreview());
-  });
-
-  function applyIfAuto(){ drawPreview(); }
-
-  // ========== Рендерінг результату ==========
+  // ==== Рендерінг ====
   function hexToRgb(hex){ const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return m?{r:parseInt(m[1],16),g:parseInt(m[2],16),b:parseInt(m[3],16)}:{r:200,g:0,b:0}}
-  function makePatternCanvas(w,h, kind, strength){
-    const c=document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d'); ctx.clearRect(0,0,w,h);
+    return m?{r:parseInt(m[1],16),g:parseInt(m[2],16),b:parseInt(m[3],16)}:{r:200,g:0,b:0} }
+  function makePatternCanvas(w,h,kind,strength){
+    const c=document.createElement('canvas'); c.width=w;c.height=h; const ctx=c.getContext('2d'); ctx.clearRect(0,0,w,h);
     const a=Math.max(0,Math.min(1,strength/100));
     if(kind==='perforation'){
       const step=18; ctx.fillStyle=`rgba(0,0,0,${0.6*a})`;
@@ -322,11 +273,10 @@
 
   function drawPreview(){
     if(!hasImage){ rctx.clearRect(0,0,render.width,render.height); return; }
-    const w=render.width, h=render.height;
+    const w=render.width,h=render.height;
     rctx.clearRect(0,0,w,h);
-    rctx.drawImage(photo,0,0);
+    rctx.drawImage(photo,0,0); // базове фото
 
-    // застосувати колір всередині маски
     const base=pctx.getImageData(0,0,w,h);
     const mimg=mctx.getImageData(0,0,w,h);
     const out=rctx.getImageData(0,0,w,h);
@@ -347,7 +297,6 @@
     }
     rctx.putImageData(out,0,0);
 
-    // глянець
     const glossK=Math.max(0,Math.min(1,gloss.value/100));
     if(glossK>0){
       rctx.globalCompositeOperation="overlay";
@@ -356,29 +305,26 @@
       rctx.globalCompositeOperation="source-over";
     }
 
-    // патерн лише в масці
     if(pattern.value!=='none'){
       const pat=makePatternCanvas(w,h,pattern.value,pstrength.value);
-      // зробимо clip прям по альфі: простий трюк — використовуємо маску як глобальну альфу
-      const tmp=document.createElement('canvas'); tmp.width=w; tmp.height=h; const tctx=tmp.getContext('2d');
-      // намалюємо маску у tmp як альфа
-      const mOnly=new ImageData(w,h);
-      for(let i=0;i<mOnly.data.length;i+=4){
-        mOnly.data[i]=0; mOnly.data[i+1]=0; mOnly.data[i+2]=0; mOnly.data[i+3]=mimg.data[i+3];
+      // застосуємо патерн ТІЛЬКИ в масці
+      const tmp=rctx.getImageData(0,0,w,h);
+      const patCtx=pat.getContext('2d'); const patImg=patCtx.getImageData(0,0,w,h);
+      for(let i=0;i<tmp.data.length;i+=4){
+        const a=mimg.data[i+3];
+        if(a>0){
+          tmp.data[i]=patImg.data[i];
+          tmp.data[i+1]=patImg.data[i+1];
+          tmp.data[i+2]=patImg.data[i+2];
+          tmp.data[i+3]=255;
+        }
       }
-      tctx.putImageData(mOnly,0,0);
-      rctx.save();
-      rctx.globalCompositeOperation="destination-in"; // лишаємо тільки те, де є альфа
-      rctx.drawImage(tmp,0,0);
-      rctx.restore();
-      rctx.drawImage(pat,0,0);
+      rctx.putImageData(tmp,0,0);
     }
 
-    // показати синю підсвітку маски (для зручності)
     if(showMask.checked){
       rctx.save();
       rctx.globalAlpha=0.35;
-      rctx.globalCompositeOperation="source-over";
       const blue=new ImageData(w,h);
       for(let i=0;i<blue.data.length;i+=4){
         blue.data[i]=30; blue.data[i+1]=80; blue.data[i+2]=255; blue.data[i+3]=mimg.data[i+3];
@@ -388,14 +334,10 @@
     }
   }
 
-  // Кнопки
-  applyBtn.addEventListener('click', drawPreview);
-  saveBtn.addEventListener('click',()=>{
-    saved.style.display='inline';
-    setTimeout(()=> saved.style.display='none', 1800);
-  });
+  document.getElementById('apply').addEventListener('click', drawPreview);
+  document.getElementById('save').addEventListener('click', ()=>{ saved.style.display='inline'; setTimeout(()=>saved.style.display='none',1800); });
+  document.getElementById('refine').addEventListener('click', ()=>{ if(hasImage) refineMaskClient().then(drawPreview); });
 
-  // Стартові розміри
   (function init(){ resizeCanvases(1200,720); })();
 </script>
 </body>
