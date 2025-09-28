@@ -32,18 +32,18 @@
     }
     .tint{mix-blend-mode:color;opacity:0;pointer-events:none}
     .shadow{mix-blend-mode:multiply;opacity:0;pointer-events:none}
-    /* ВАЖЛИВО: прозоре полотно, щоб фото було видно */
-    .maskCanvas{pointer-events:auto;background:transparent}
+    /* Полотно невидиме, але приймає кліки */
+    .maskCanvas{pointer-events:auto;background:transparent;opacity:0; cursor: crosshair;}
     .hint{font-size:12px;opacity:.7;margin-top:8px}
     .mode{padding:6px 10px;border-radius:8px;background:#242424;display:flex;gap:6px}
     .mode input{accent-color:var(--accent)}
+    .toggle{display:flex;align-items:center;gap:6px}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Car Color Tool</h1>
 
-    <!-- ПАНЕЛЬ 1: фото + базові дії -->
     <div class="card" style="margin-bottom:10px">
       <div class="row">
         <input type="file" id="fileInput" accept="image/*"/>
@@ -52,7 +52,6 @@
       </div>
       <hr class="divider">
 
-      <!-- ПАНЕЛЬ 2: колір/інтенсивність -->
       <div class="row">
         <span class="label">Колір:</span>
         <input type="color" id="colorPick" value="#ff6600"/>
@@ -63,10 +62,13 @@
           <input type="checkbox" id="keepShadows" checked/>
           <span class="label">Зберегти тіні (реалістичніше)</span>
         </label>
+        <label class="toggle" style="margin-left:auto">
+          <input type="checkbox" id="showMask"/>
+          <span class="label">Показати маску</span>
+        </label>
       </div>
       <hr class="divider">
 
-      <!-- ПАНЕЛЬ 3: ручне виділення -->
       <div class="row">
         <div class="mode">
           <label class="label"><input type="radio" name="tool" value="brush" checked> Пензлик</label>
@@ -76,10 +78,9 @@
         <input type="range" id="brushSize" min="5" max="120" value="32"/>
         <span id="brushVal" class="label">32 px</span>
       </div>
-      <div class="hint">Малюй по фото: білим додаєш виділення (пензлик), чорним стираєш (гумка). Перефарбовується тільки виділена зона.</div>
+      <div class="hint">Малюй по фото: білим додаєш виділення (пензлик), гумкою стираєш. Виділена зона перефарбовується.</div>
     </div>
 
-    <!-- ПЕРЕГЛЯДАЧ -->
     <div class="viewer" id="viewer">
       <img id="photo" alt="Фото"/>
       <div class="tint" id="tint"></div>
@@ -89,7 +90,6 @@
   </div>
 
   <script>
-    // Елементи
     const fileInput = document.getElementById('fileInput');
     const resetBtn = document.getElementById('resetBtn');
     const clearMaskBtn = document.getElementById('clearMask');
@@ -98,6 +98,7 @@
     const strength = document.getElementById('strength');
     const strengthVal = document.getElementById('strengthVal');
     const keepShadows = document.getElementById('keepShadows');
+    const showMask = document.getElementById('showMask');
 
     const brushSize = document.getElementById('brushSize');
     const brushVal = document.getElementById('brushVal');
@@ -112,7 +113,6 @@
 
     let hasImage=false, drawing=false, tool='brush';
 
-    // Завантаження фото
     fileInput.addEventListener('change', ()=>{
       const f=fileInput.files?.[0]; if(!f) return;
       const r=new FileReader();
@@ -121,24 +121,21 @@
         hasImage = true;
         photo.onload = () => {
           fitCanvasToViewer();
-          clearMask();   // прозора маска
-          applyTint();   // застосувати налаштування
+          clearMask();
+          applyTint();
         };
       };
       r.readAsDataURL(f);
     });
 
-    // Підганяємо полотно під розмір viewer
     function fitCanvasToViewer(){
       const rect = viewer.getBoundingClientRect();
       maskCanvas.width  = rect.width;
       maskCanvas.height = rect.height;
-      // НІЯКОГО чорного фону — прозоро:
       ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
       updateCssMask();
     }
 
-    // Колір/сила/тіні
     function applyTint(){
       if(!hasImage) return;
       const c = colorPick.value;
@@ -155,11 +152,14 @@
     strength.addEventListener('input', ()=>{strengthVal.textContent=strength.value+"%"; applyTint();});
     keepShadows.addEventListener('change', applyTint);
 
-    // Інструменти
     toolRadios.forEach(r=>r.addEventListener('change', e=>{ tool = e.target.value; }));
     brushSize.addEventListener('input', ()=>{ brushVal.textContent = brushSize.value + " px"; });
 
-    // Малювання маски (біле = видно, прозоре = приховано)
+    // показ/приховування маски для перевірки
+    showMask.addEventListener('change', ()=>{
+      maskCanvas.style.opacity = showMask.checked ? '0.4' : '0';
+    });
+
     const getPos = (evt)=>{
       const rect = maskCanvas.getBoundingClientRect();
       const e = evt.touches ? evt.touches[0] : evt;
@@ -172,10 +172,10 @@
       ctx.lineJoin = ctx.lineCap = 'round';
       ctx.lineWidth = Number(brushSize.value);
       if (tool==='brush'){
-        ctx.globalCompositeOperation = 'source-over'; // малюємо білим
+        ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = 'white';
       } else {
-        ctx.globalCompositeOperation = 'destination-out'; // стираємо до прозорого
+        ctx.globalCompositeOperation = 'destination-out';
         ctx.strokeStyle = 'rgba(0,0,0,1)';
       }
       const p=getPos(e);
@@ -191,7 +191,6 @@
     };
     const end = ()=>{ drawing=false; ctx.beginPath(); };
 
-    // Pointer & Touch
     maskCanvas.addEventListener('pointerdown', start);
     maskCanvas.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end);
@@ -199,7 +198,6 @@
     maskCanvas.addEventListener('touchmove',  (e)=>{ e.preventDefault(); move(e);  }, {passive:false});
     window.addEventListener('touchend', end);
 
-    // Застосувати маску до кольорових шарів
     function updateCssMask(){
       const url = maskCanvas.toDataURL('image/png');
       [tint, shadow].forEach(el=>{
@@ -210,7 +208,6 @@
       });
     }
 
-    // Очистити виділення (повністю прозоро)
     function clearMask(){
       ctx.globalCompositeOperation='source-over';
       ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
@@ -218,7 +215,6 @@
     }
     clearMaskBtn.addEventListener('click', clearMask);
 
-    // Скинути налаштування кольору
     resetBtn.addEventListener('click', ()=>{
       if(!hasImage) return;
       colorPick.value="#ff6600";
@@ -228,7 +224,6 @@
       tint.style.opacity="0"; shadow.style.opacity="0";
     });
 
-    // На старті підлаштуємо полотно
     window.addEventListener('resize', ()=>{ if(hasImage) fitCanvasToViewer(); });
     fitCanvasToViewer();
   </script>
