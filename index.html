@@ -8,7 +8,7 @@
     :root { --accent:#ff6600; }
     *{box-sizing:border-box}
     body{margin:0;background:#0d0d0d;color:#fff;font-family:Arial, sans-serif}
-    .wrap{max-width:1000px;margin:0 auto;padding:16px}
+    .wrap{max-width:1100px;margin:0 auto;padding:16px}
     h1{margin:8px 0 14px;font-size:22px}
     .card{background:#131313;border:1px solid #242424;border-radius:12px;padding:12px}
     .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
@@ -16,6 +16,7 @@
       background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:14px
     }
     .btn.ghost{background:#242424}
+    .btn.gray{background:#3a3a3a}
     .btn:hover, input[type="file"]::file-selector-button:hover{filter:brightness(.95)}
     input[type="color"]{width:44px;height:36px;border:none;background:transparent}
     input[type="range"]{width:160px}
@@ -32,25 +33,36 @@
     }
     .tint{mix-blend-mode:color;opacity:0;pointer-events:none}
     .shadow{mix-blend-mode:multiply;opacity:0;pointer-events:none}
+    /* Полотно невидиме, але приймає кліки (можна увімкнути показ) */
     .maskCanvas{pointer-events:auto;background:transparent;opacity:0; cursor: crosshair;}
     .hint{font-size:12px;opacity:.7;margin-top:8px}
     .mode{padding:6px 10px;border-radius:8px;background:#242424;display:flex;gap:6px}
     .mode input{accent-color:var(--accent)}
+    .spacer{flex:1}
+    .kbd{background:#242424;border-radius:6px;padding:2px 6px;font-size:12px;margin-left:6px}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Car Color Tool</h1>
 
+    <!-- ПАНЕЛЬ 1: фото + дії -->
     <div class="card" style="margin-bottom:10px">
       <div class="row">
         <input type="file" id="fileInput" accept="image/*"/>
         <button id="resetBtn" class="btn">Скинути налаштування</button>
         <button id="clearMask" class="btn ghost">Очистити виділення</button>
-        <button id="autoSelect" class="btn">Виділити подібні</button>
+
+        <div class="spacer"></div>
+
+        <button id="undoBtn" class="btn gray" title="Ctrl/Cmd + Z">Скасувати</button>
+        <button id="redoBtn" class="btn gray" title="Ctrl/Cmd + Shift + Z">Повторити</button>
+        <button id="saveMaskBtn" class="btn">Зберегти маску (PNG)</button>
       </div>
+
       <hr class="divider">
 
+      <!-- ПАНЕЛЬ 2: колір/інтенсивність -->
       <div class="row">
         <span class="label">Колір:</span>
         <input type="color" id="colorPick" value="#ff6600"/>
@@ -61,25 +73,31 @@
           <input type="checkbox" id="keepShadows" checked/>
           <span class="label">Зберегти тіні</span>
         </label>
+        <label class="row" style="gap:6px;margin-left:16px">
+          <input type="checkbox" id="showMask"/>
+          <span class="label">Показати маску</span>
+        </label>
       </div>
+
       <hr class="divider">
 
+      <!-- ПАНЕЛЬ 3: ручне виділення -->
       <div class="row">
         <div class="mode">
           <label class="label"><input type="radio" name="tool" value="brush" checked> Пензлик</label>
           <label class="label"><input type="radio" name="tool" value="eraser"> Гумка</label>
         </div>
         <span class="label">Розмір кисті:</span>
-        <input type="range" id="brushSize" min="5" max="120" value="32"/>
-        <span id="brushVal" class="label">32 px</span>
-
-        <span class="label" style="margin-left:20px;">Допуск кольору:</span>
-        <input type="range" id="tolerance" min="5" max="80" value="25"/>
-        <span id="tolVal" class="label">25</span>
+        <input type="range" id="brushSize" min="5" max="160" value="36"/>
+        <span id="brushVal" class="label">36 px</span>
       </div>
-      <div class="hint">Можна малювати вручну або клацнути "Виділити подібні" після вибору зразка.</div>
+      <div class="hint">
+        Малюй по фото: білим додаєш виділення (пензлик), гумкою стираєш. Перефарбовується тільки виділена зона.
+        Швидкі клавіші: <span class="kbd">B</span> пензлик, <span class="kbd">E</span> гумка, <span class="kbd">Ctrl/Cmd + Z</span> скасувати, <span class="kbd">Ctrl/Cmd + Shift + Z</span> повторити.
+      </div>
     </div>
 
+    <!-- ПЕРЕГЛЯДАЧ -->
     <div class="viewer" id="viewer">
       <img id="photo" alt="Фото"/>
       <div class="tint" id="tint"></div>
@@ -89,22 +107,23 @@
   </div>
 
   <script>
+    // ЕЛЕМЕНТИ
     const fileInput = document.getElementById('fileInput');
     const resetBtn = document.getElementById('resetBtn');
     const clearMaskBtn = document.getElementById('clearMask');
-    const autoSelectBtn = document.getElementById('autoSelect');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const saveMaskBtn = document.getElementById('saveMaskBtn');
 
     const colorPick = document.getElementById('colorPick');
     const strength = document.getElementById('strength');
     const strengthVal = document.getElementById('strengthVal');
     const keepShadows = document.getElementById('keepShadows');
+    const showMask = document.getElementById('showMask');
 
     const brushSize = document.getElementById('brushSize');
     const brushVal = document.getElementById('brushVal');
     const toolRadios = document.querySelectorAll('input[name="tool"]');
-
-    const tolerance = document.getElementById('tolerance');
-    const tolVal = document.getElementById('tolVal');
 
     const photo = document.getElementById('photo');
     const tint  = document.getElementById('tint');
@@ -113,8 +132,11 @@
     const maskCanvas = document.getElementById('mask');
     const ctx = maskCanvas.getContext('2d');
 
-    let hasImage=false, drawing=false, tool='brush', imgData=null, sampleColor=null;
+    // СТАН
+    let hasImage=false, drawing=false, tool='brush';
+    let undoStack=[], redoStack=[]; // стек історії для маски
 
+    // ЗАВАНТАЖЕННЯ ФОТО
     fileInput.addEventListener('change', ()=>{
       const f=fileInput.files?.[0]; if(!f) return;
       const r=new FileReader();
@@ -123,27 +145,24 @@
         hasImage = true;
         photo.onload = () => {
           fitCanvasToViewer();
-          clearMask();
+          clearMask(true); // true — не пушимо в історію порожній стан двічі
           applyTint();
-          // зчитати дані з фото
-          const tmp = document.createElement('canvas');
-          tmp.width = photo.naturalWidth; tmp.height=photo.naturalHeight;
-          const ctmp = tmp.getContext('2d');
-          ctmp.drawImage(photo,0,0);
-          imgData = ctmp.getImageData(0,0,tmp.width,tmp.height);
         };
       };
       r.readAsDataURL(f);
     });
 
+    // РОЗМІР ПОЛОТНА ПІД VIEWER
     function fitCanvasToViewer(){
       const rect = viewer.getBoundingClientRect();
       maskCanvas.width  = rect.width;
       maskCanvas.height = rect.height;
       ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
+      pushHistory(); // початковий стан
       updateCssMask();
     }
 
+    // КОЛІР/ІНТЕНСИВНІСТЬ/ТІНІ
     function applyTint(){
       if(!hasImage) return;
       const c = colorPick.value;
@@ -160,16 +179,18 @@
     strength.addEventListener('input', ()=>{strengthVal.textContent=strength.value+"%"; applyTint();});
     keepShadows.addEventListener('change', applyTint);
 
+    // ІНСТРУМЕНТИ
     toolRadios.forEach(r=>r.addEventListener('change', e=>{ tool = e.target.value; }));
     brushSize.addEventListener('input', ()=>{ brushVal.textContent = brushSize.value + " px"; });
-    tolerance.addEventListener('input', ()=>{ tolVal.textContent = tolerance.value; });
+    showMask.addEventListener('change', ()=>{ maskCanvas.style.opacity = showMask.checked ? '0.4' : '0'; });
 
-    // малювання вручну
+    // МАЛЮВАННЯ МАСКИ
     const getPos = (evt)=>{
       const rect = maskCanvas.getBoundingClientRect();
       const e = evt.touches ? evt.touches[0] : evt;
       return { x: (e.clientX - rect.left), y: (e.clientY - rect.top) };
     };
+
     const start = (e)=>{
       if(!hasImage) return;
       drawing=true;
@@ -180,25 +201,32 @@
       const p=getPos(e);
       ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+0.01,p.y+0.01); ctx.stroke();
       updateCssMask();
-      // зберігаємо колір вибраної точки для автопідбору
-      if (!sampleColor && imgData){
-        const ratioX = photo.naturalWidth / maskCanvas.width;
-        const ratioY = photo.naturalHeight / maskCanvas.height;
-        const ix = Math.floor(p.x * ratioX), iy=Math.floor(p.y * ratioY);
-        const idx=(iy*imgData.width+ix)*4;
-        sampleColor=[imgData.data[idx],imgData.data[idx+1],imgData.data[idx+2]];
-      }
     };
     const move = (e)=>{
       if(!drawing || !hasImage) return;
-      const p=getPos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); updateCssMask();
+      const p=getPos(e);
+      ctx.lineTo(p.x,p.y);
+      ctx.stroke();
+      updateCssMask();
     };
-    const end = ()=>{ drawing=false; ctx.beginPath(); };
+    const end = ()=>{
+      if(drawing){
+        drawing=false; ctx.beginPath();
+        pushHistory(); // зберегли стан після мазка
+        redoStack=[];  // очищаємо redo після нового кроку
+        updateUndoRedoButtons();
+      }
+    };
 
+    // Події миші/тачу
     maskCanvas.addEventListener('pointerdown', start);
     maskCanvas.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end);
+    maskCanvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); start(e); }, {passive:false});
+    maskCanvas.addEventListener('touchmove',  (e)=>{ e.preventDefault(); move(e);  }, {passive:false});
+    window.addEventListener('touchend', end);
 
+    // CSS-маска для кольорових шарів
     function updateCssMask(){
       const url = maskCanvas.toDataURL('image/png');
       [tint, shadow].forEach(el=>{
@@ -209,38 +237,87 @@
       });
     }
 
-    function clearMask(){ ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height); updateCssMask(); sampleColor=null; }
-    clearMaskBtn.addEventListener('click', clearMask);
+    // ОЧИСТИТИ МАСКУ
+    function clearMask(skipHistory=false){
+      ctx.globalCompositeOperation='source-over';
+      ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
+      if(!skipHistory) pushHistory();
+      redoStack=[];
+      updateUndoRedoButtons();
+      updateCssMask();
+    }
+    clearMaskBtn.addEventListener('click', ()=>clearMask());
 
+    // ІСТОРІЯ (UNDO/REDO)
+    function pushHistory(){
+      try {
+        const snap = ctx.getImageData(0,0,maskCanvas.width,maskCanvas.height);
+        undoStack.push(snap);
+        if(undoStack.length>50) undoStack.shift(); // ліміт історії
+      } catch(e){ /* інколи може кинути помилку у старих браузерах */ }
+    }
+    function restore(imageData){
+      ctx.putImageData(imageData,0,0);
+      updateCssMask();
+    }
+    function undo(){
+      if(undoStack.length<=1) return;            // нема куди
+      const current = undoStack.pop();           // поточний -> в redo
+      redoStack.push(current);
+      const prev = undoStack[undoStack.length-1];// попередній показуємо
+      restore(prev);
+      updateUndoRedoButtons();
+    }
+    function redo(){
+      if(redoStack.length===0) return;
+      const next = redoStack.pop();
+      undoStack.push(next);
+      restore(next);
+      updateUndoRedoButtons();
+    }
+    function updateUndoRedoButtons(){
+      undoBtn.disabled = undoStack.length<=1;
+      redoBtn.disabled = redoStack.length===0;
+      undoBtn.style.opacity = undoBtn.disabled ? .6 : 1;
+      redoBtn.style.opacity = redoBtn.disabled ? .6 : 1;
+    }
+    undoBtn.addEventListener('click', undo);
+    redoBtn.addEventListener('click', redo);
+
+    // КЛАВІАТУРНІ ШОТКАТИ
+    window.addEventListener('keydown', (e)=>{
+      const mod = e.ctrlKey || e.metaKey;
+      if(mod && e.key.toLowerCase()==='z' && !e.shiftKey){ e.preventDefault(); undo(); }
+      if(mod && e.key.toLowerCase()==='z' && e.shiftKey){ e.preventDefault(); redo(); }
+      if(e.key.toLowerCase()==='b'){ tool='brush'; toolRadios[0].checked=true; }
+      if(e.key.toLowerCase()==='e'){ tool='eraser'; toolRadios[1].checked=true; }
+    });
+
+    // ЗБЕРЕГТИ МАСКУ PNG (прозорий фон, біла маска)
+    saveMaskBtn.addEventListener('click', ()=>{
+      const link = document.createElement('a');
+      link.download = 'mask.png';
+      link.href = maskCanvas.toDataURL('image/png');
+      link.click();
+    });
+
+    // СКИНУТИ НАЛАШТУВАННЯ
     resetBtn.addEventListener('click', ()=>{
       if(!hasImage) return;
-      colorPick.value="#ff6600"; strength.value="70"; strengthVal.textContent="70%";
-      keepShadows.checked=true; clearMask(); tint.style.opacity="0"; shadow.style.opacity="0";
+      colorPick.value="#ff6600";
+      strength.value="70"; strengthVal.textContent="70%";
+      keepShadows.checked=true;
+      showMask.checked=false; maskCanvas.style.opacity='0';
+      clearMask();
+      tint.style.opacity="0"; shadow.style.opacity="0";
     });
 
-    // --- Автовиділення подібних
-    autoSelectBtn.addEventListener('click', ()=>{
-      if(!imgData || !sampleColor) return alert("Спершу обери точку пензликом");
-      const tol = Number(tolerance.value);
-      const tmp = document.createElement('canvas');
-      tmp.width=imgData.width; tmp.height=imgData.height;
-      const ctmp=tmp.getContext('2d');
-      const mask=ctmp.createImageData(imgData.width,imgData.height);
-      for(let i=0;i<imgData.data.length;i+=4){
-        const r=imgData.data[i], g=imgData.data[i+1], b=imgData.data[i+2];
-        const dist=Math.sqrt((r-sampleColor[0])**2+(g-sampleColor[1])**2+(b-sampleColor[2])**2);
-        if(dist<tol*3){ mask.data[i]=255; mask.data[i+1]=255; mask.data[i+2]=255; mask.data[i+3]=255; }
-        else{ mask.data[i+3]=0; }
-      }
-      ctmp.putImageData(mask,0,0);
-      // маштабуємо маску до viewer
-      ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
-      ctx.drawImage(tmp,0,0,maskCanvas.width,maskCanvas.height);
-      updateCssMask();
-    });
-
+    // Реакція на ресайз
     window.addEventListener('resize', ()=>{ if(hasImage) fitCanvasToViewer(); });
+
+    // Стартове оновлення
     fitCanvasToViewer();
+    updateUndoRedoButtons();
   </script>
 </body>
 </html>
