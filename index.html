@@ -2,215 +2,305 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Car Color Tool</title>
   <style>
     :root { --accent:#ff6600; }
-    * { box-sizing: border-box; }
-    body {
-      margin:0; background:#0d0d0d; color:#fff; font-family: Arial, sans-serif;
+    *{box-sizing:border-box}
+    body{margin:0;background:#0d0d0d;color:#fff;font-family:Arial, sans-serif}
+    .wrap{max-width:1000px;margin:0 auto;padding:16px}
+    h1{margin:8px 0 14px;font-size:22px}
+    .card{background:#131313;border:1px solid #242424;border-radius:12px;padding:12px}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    .btn, input[type="file"]::file-selector-button{
+      background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:14px
     }
-    .wrap { max-width: 960px; margin: 0 auto; padding: 20px; }
-    h1 { margin:10px 0 20px; font-size: 22px; font-weight:700; }
-    .controls {
-      display:flex; flex-wrap: wrap; gap:10px; align-items:center; margin-bottom:12px;
+    .btn.ghost{background:#242424}
+    .btn:hover, input[type="file"]::file-selector-button:hover{filter:brightness(.95)}
+    input[type="color"]{width:44px;height:36px;border:none;background:transparent}
+    input[type="range"]{width:160px}
+    .label{font-size:13px;opacity:.9}
+    .divider{border-color:#232323;margin:10px 0}
+
+    .viewer{
+      position:relative;width:100%;
+      aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;
+      border:2px solid var(--accent);touch-action:none;
     }
-    .btn, input[type="file"]::file-selector-button {
-      background: var(--accent); color:#fff; border:none; padding:10px 16px;
-      border-radius:8px; font-size:14px; cursor:pointer;
+    .viewer img,.tint,.shadow,.maskCanvas{
+      position:absolute;inset:0;width:100%;height:100%;object-fit:contain
     }
-    .btn:hover, input[type="file"]::file-selector-button:hover { filter: brightness(0.95); }
-    .card { background:#131313; border:1px solid #242424; border-radius:12px; padding:14px; }
-    .viewer {
-      position: relative; width: 100%;
-      aspect-ratio: 16/9;
-      background:#000; border-radius:10px; overflow:hidden; border:2px solid var(--accent);
-    }
-    .viewer img, .viewer .tint {
-      position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
-    }
-    .tint { mix-blend-mode: color; opacity: 0; pointer-events:none; }
-    .maskCanvas {
-      position:absolute; inset:0; width:100%; height:100%;
-      pointer-events:auto; background: transparent;
-    }
-    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-    .label { font-size:13px; opacity:.9; }
-    input[type="color"] { width:44px; height:36px; padding:0; border:none; background:transparent; }
-    input[type="range"] { width: 160px; }
-    .hint { font-size:12px; opacity:.7; margin-top:8px; }
+    .tint{mix-blend-mode:color;opacity:0;pointer-events:none}
+    .shadow{mix-blend-mode:multiply;opacity:0;pointer-events:none}
+    /* Полотно невидиме, але приймає кліки (можна увімкнути показ) */
+    .maskCanvas{pointer-events:auto;background:transparent;opacity:0; cursor: crosshair;}
+    .hint{font-size:12px;opacity:.7;margin-top:8px}
+    .mode{padding:6px 10px;border-radius:8px;background:#242424;display:flex;gap:6px}
+    .mode input{accent-color:var(--accent)}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Car Color Tool</h1>
 
-    <div class="controls card">
+    <div class="card" style="margin-bottom:10px">
       <div class="row">
-        <input type="file" id="fileInput" accept="image/*" />
-        <button id="resetBtn" class="btn">Скинути налаштування</button>
-        <button id="clearBtn" class="btn">Очистити виділення</button>
+        <input type="file" id="fileInput" accept="image/*"/>
+        <button id="resetBtn"  class="btn">Скинути налаштування</button>
+        <button id="clearMask" class="btn ghost">Очистити виділення</button>
         <button id="refineBtn" class="btn">Уточнити маску (Auto)</button>
       </div>
 
-      <hr style="border-color:#222; margin:12px 0;">
+      <hr class="divider">
 
       <div class="row">
         <span class="label">Колір:</span>
-        <input type="color" id="colorPick" value="#ff6600" />
+        <input type="color" id="colorPick" value="#ff6600"/>
         <span class="label">Інтенсивність:</span>
-        <input type="range" id="strength" min="0" max="100" value="70" />
-        <span class="label" id="strengthVal">70%</span>
-        <label class="row" style="gap:6px;margin-left:12px;">
-          <input type="checkbox" id="keepShadows" checked />
+        <input type="range" id="strength" min="0" max="100" value="70"/>
+        <span id="strengthVal" class="label">70%</span>
+        <label class="row" style="gap:6px;margin-left:10px">
+          <input type="checkbox" id="keepShadows" checked/>
           <span class="label">Зберегти тіні</span>
         </label>
+        <label class="row" style="gap:6px;margin-left:16px">
+          <input type="checkbox" id="showMask"/>
+          <span class="label">Показати маску</span>
+        </label>
       </div>
-      <div class="hint">Малюй по фото: білим додаєш (пензлик), чорним стираєш (гумка). Перефарбовується тільки виділена зона.</div>
+
+      <hr class="divider">
+
       <div class="row">
-        <label><input type="radio" name="tool" value="brush" checked> Пензлик</label>
-        <label><input type="radio" name="tool" value="eraser"> Гумка</label>
+        <div class="mode">
+          <label class="label"><input type="radio" name="tool" value="brush" checked> Пензлик</label>
+          <label class="label"><input type="radio" name="tool" value="eraser"> Гумка</label>
+        </div>
         <span class="label">Розмір кисті:</span>
-        <input type="range" id="brushSize" min="5" max="100" value="30" />
-        <span id="brushVal">30 px</span>
+        <input type="range" id="brushSize" min="5" max="160" value="36"/>
+        <span id="brushVal" class="label">36 px</span>
       </div>
+      <div class="hint">Малюй усередині потрібної деталі (не по краю). Після цього тисни «Уточнити маску (Auto)» — краї стануть чіткішими.</div>
     </div>
 
     <div class="viewer" id="viewer">
-      <img id="photo" alt="Фото" />
-      <canvas id="maskCanvas" class="maskCanvas"></canvas>
+      <img id="photo" alt="Фото"/>
       <div class="tint" id="tint"></div>
+      <div class="shadow" id="shadow"></div>
+      <canvas id="mask" class="maskCanvas"></canvas>
     </div>
   </div>
 
   <script>
-    const API_URL = "https://car-color-api.onrender.com"; // твій бекенд
+    /* ← ВКАЖИ СВІЙ бекенд Render (без /refine в кінці) */
+    const API_URL = "https://car-color-api.onrender.com";
 
+    // ЕЛЕМЕНТИ
     const fileInput = document.getElementById('fileInput');
-    const resetBtn  = document.getElementById('resetBtn');
-    const clearBtn  = document.getElementById('clearBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const clearMaskBtn = document.getElementById('clearMask');
+    const refineBtn = document.getElementById('refineBtn');
+
     const colorPick = document.getElementById('colorPick');
-    const strength  = document.getElementById('strength');
+    const strength = document.getElementById('strength');
     const strengthVal = document.getElementById('strengthVal');
     const keepShadows = document.getElementById('keepShadows');
+    const showMask = document.getElementById('showMask');
+
     const brushSize = document.getElementById('brushSize');
     const brushVal = document.getElementById('brushVal');
-    const refineBtn = document.getElementById('refineBtn');
+    const toolRadios = document.querySelectorAll('input[name="tool"]');
 
     const photo = document.getElementById('photo');
     const tint  = document.getElementById('tint');
-    const maskCanvas = document.getElementById('maskCanvas');
+    const shadow= document.getElementById('shadow');
+    const viewer= document.getElementById('viewer');
+    const maskCanvas = document.getElementById('mask');
     const ctx = maskCanvas.getContext('2d');
 
-    let drawing = false, tool="brush", hasImage=false;
+    // СТАН
+    let hasImage=false, drawing=false, tool='brush';
 
-    // завантаження фото
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = e => {
-        photo.onload = ()=> fitCanvas();
+    // ЗАВАНТАЖЕННЯ ФОТО
+    fileInput.addEventListener('change', ()=>{
+      const f=fileInput.files?.[0]; if(!f) return;
+      const r=new FileReader();
+      r.onload=e=>{
         photo.src = e.target.result;
         hasImage = true;
+        photo.onload = () => {
+          fitCanvasToViewer();
+          clearMask(true);
+          applyTint();
+        };
       };
-      reader.readAsDataURL(file);
+      r.readAsDataURL(f);
     });
 
-    function fitCanvas(){
-      maskCanvas.width = photo.width;
-      maskCanvas.height = photo.height;
+    // РОЗМІР ПОЛОТНА = РОЗМІРУ VIEWER (щоб точно співпало з картинкою)
+    function fitCanvasToViewer(){
+      const rect = viewer.getBoundingClientRect();
+      maskCanvas.width  = rect.width;
+      maskCanvas.height = rect.height;
       ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
+      updateCssMask();
     }
 
-    // малювання
-    maskCanvas.addEventListener('mousedown', e=>{drawing=true; draw(e);});
-    maskCanvas.addEventListener('mousemove', draw);
-    maskCanvas.addEventListener('mouseup', ()=>drawing=false);
-    maskCanvas.addEventListener('mouseleave', ()=>drawing=false);
-
-    function draw(e){
-      if(!drawing) return;
-      const rect = maskCanvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      ctx.fillStyle = tool==="brush" ? "white" : "black";
-      ctx.beginPath();
-      ctx.arc(x,y, brushSize.value/2, 0, Math.PI*2);
-      ctx.fill();
-      updateMask();
-    }
-
-    function updateMask(){
-      const maskURL = maskCanvas.toDataURL();
-      tint.style.maskImage = `url(${maskURL})`;
-      tint.style.webkitMaskImage = `url(${maskURL})`;
-    }
-
-    document.querySelectorAll("input[name=tool]").forEach(r=>r.addEventListener("change", e=>{
-      tool=e.target.value;
-    }));
-
-    brushSize.addEventListener("input", ()=>{
-      brushVal.textContent = brushSize.value+" px";
-    });
-
-    // колір/сила
+    // КОЛІР/ІНТЕНСИВНІСТЬ/ТІНІ
     function applyTint(){
-      const c=colorPick.value;
-      const s=Number(strength.value)/100;
+      if(!hasImage) return;
+      const c = colorPick.value;
+      const s = Number(strength.value)/100;
       tint.style.background = c;
-      tint.style.opacity = s;
+      tint.style.opacity = s.toString();
+      if (keepShadows.checked){
+        shadow.style.background = c;
+        shadow.style.opacity = (s*0.35).toString();
+      } else shadow.style.opacity = "0";
+      updateCssMask();
     }
-    colorPick.addEventListener("input", applyTint);
-    strength.addEventListener("input", ()=>{
-      strengthVal.textContent = strength.value+"%";
-      applyTint();
-    });
+    colorPick.addEventListener('input', applyTint);
+    strength.addEventListener('input', ()=>{strengthVal.textContent=strength.value+"%"; applyTint();});
+    keepShadows.addEventListener('change', applyTint);
+    showMask.addEventListener('change', ()=>{ maskCanvas.style.opacity = showMask.checked ? '0.4' : '0'; });
 
-    resetBtn.addEventListener("click", ()=>{
+    // ІНСТРУМЕНТИ
+    toolRadios.forEach(r=>r.addEventListener('change', e=>{ tool = e.target.value; }));
+    brushSize.addEventListener('input', ()=>{ brushVal.textContent = brushSize.value + " px"; });
+
+    // МАЛЮВАННЯ МАСКИ
+    const getPos = (evt)=>{
+      const rect = maskCanvas.getBoundingClientRect();
+      const e = evt.touches ? evt.touches[0] : evt;
+      return { x: (e.clientX - rect.left), y: (e.clientY - rect.top) };
+    };
+    const start = (e)=>{
+      if(!hasImage) return;
+      drawing=true;
+      ctx.lineJoin = ctx.lineCap = 'round';
+      ctx.lineWidth = Number(brushSize.value);
+      if (tool==='brush'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = 'white'; }
+      else { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; }
+      const p=getPos(e);
+      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+0.01,p.y+0.01); ctx.stroke();
+      updateCssMask();
+    };
+    const move = (e)=>{
+      if(!drawing || !hasImage) return;
+      const p=getPos(e);
+      ctx.lineTo(p.x,p.y);
+      ctx.stroke();
+      updateCssMask();
+    };
+    const end = ()=>{ drawing=false; ctx.beginPath(); };
+
+    maskCanvas.addEventListener('pointerdown', start);
+    maskCanvas.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    maskCanvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); start(e); }, {passive:false});
+    maskCanvas.addEventListener('touchmove',  (e)=>{ e.preventDefault(); move(e);  }, {passive:false});
+    window.addEventListener('touchend', end);
+
+    // CSS-маска для кольорових шарів
+    function updateCssMask(){
+      const url = maskCanvas.toDataURL('image/png');
+      [tint, shadow].forEach(el=>{
+        el.style.maskImage = `url(${url})`;
+        el.style.webkitMaskImage = `url(${url})`;
+        el.style.maskSize = '100% 100%';
+        el.style.webkitMaskSize = '100% 100%';
+      });
+    }
+
+    // ОЧИСТИТИ МАСКУ
+    function clearMask(skipHistory=false){
+      ctx.globalCompositeOperation='source-over';
+      ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
+      updateCssMask();
+    }
+    clearMaskBtn.addEventListener('click', ()=>clearMask());
+
+    // СКИНУТИ НАЛАШТУВАННЯ
+    resetBtn.addEventListener('click', ()=>{
       if(!hasImage) return;
       colorPick.value="#ff6600";
-      strength.value=70; strengthVal.textContent="70%";
-      tint.style.opacity=0;
-      ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
-      updateMask();
-    });
-    clearBtn.addEventListener("click", ()=>{
-      ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
-      updateMask();
+      strength.value="70"; strengthVal.textContent="70%";
+      keepShadows.checked=true;
+      showMask.checked=false; maskCanvas.style.opacity='0';
+      clearMask();
+      tint.style.opacity="0"; shadow.style.opacity="0";
     });
 
-    // refine mask
+    // --- УТОЧНЕННЯ (бекенд OpenCV GrabCut з ROI) ---
     async function refineMaskOnServer(){
       if(!hasImage){ alert("Завантаж фото спочатку."); return; }
 
+      // 1) Фото оригінального розміру
       const photoBlob = await (await fetch(photo.src)).blob();
-      const maskBlob = await (await fetch(maskCanvas.toDataURL())).blob();
+
+      // 2) Маска (PNG)
+      const maskBlob = await (await fetch(maskCanvas.toDataURL("image/png"))).blob();
+
+      // 3) ROI з мазків: мінімальний прямокутник довкола білої маски + відступ
+      const r = maskCanvas.getContext('2d').getImageData(0,0,maskCanvas.width,maskCanvas.height).data;
+      let minX=Infinity,minY=Infinity,maxX=-1,maxY=-1;
+      for (let i=0;i<r.length;i+=4){
+        const a = r[i+3];
+        if(a>0){
+          const idx = i/4;
+          const x = idx % maskCanvas.width;
+          const y = Math.floor(idx / maskCanvas.width);
+          if(x<minX) minX=x; if(y<minY) minY=y;
+          if(x>maxX) maxX=x; if(y>maxY) maxY=y;
+        }
+      }
+      if(!isFinite(minX)){ alert("Намалюй грубу область пензликом і спробуй знову."); return; }
+      const pad = 40;
+      minX = Math.max(0, minX - pad);
+      minY = Math.max(0, minY - pad);
+      maxX = Math.min(maskCanvas.width -1, maxX + pad);
+      maxY = Math.min(maskCanvas.height-1, maxY + pad);
+
+      // 4) Переводимо ROI у координати оригінального фото
+      const scaleX = photo.naturalWidth  / maskCanvas.width;
+      const scaleY = photo.naturalHeight / maskCanvas.height;
+      const roiX = Math.round(minX * scaleX);
+      const roiY = Math.round(minY * scaleY);
+      const roiW = Math.round((maxX - minX + 1) * scaleX);
+      const roiH = Math.round((maxY - minY + 1) * scaleY);
+
+      // 5) Відправляємо
       const fd = new FormData();
       fd.append("image", photoBlob, "image.png");
-      fd.append("mask", maskBlob, "mask.png");
+      fd.append("mask",  maskBlob,  "mask.png");
+      fd.append("x", roiX); fd.append("y", roiY);
+      fd.append("w", roiW); fd.append("h", roiH);
 
-      refineBtn.disabled = true; refineBtn.textContent="Працюю...";
+      refineBtn.disabled = true; refineBtn.textContent = "Працюю...";
       try{
-        const res = await fetch(API_URL+"/refine",{method:"POST",body:fd});
+        const res = await fetch(API_URL + "/refine", { method:"POST", body: fd });
+        if(!res.ok) throw new Error("Server error");
         const data = await res.json();
+
+        // 6) Намалювати покращену маску поверх viewer
         const img = new Image();
-        img.onload=()=>{
+        img.onload = ()=>{
           ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
           ctx.drawImage(img,0,0,maskCanvas.width,maskCanvas.height);
-          updateMask();
-          refineBtn.disabled=false; refineBtn.textContent="Уточнити маску (Auto)";
+          updateCssMask();
+          refineBtn.disabled = false; refineBtn.textContent = "Уточнити маску (Auto)";
         };
-        img.src="data:image/png;base64,"+data.mask_png_base64;
+        img.src = "data:image/png;base64," + data.mask_png_base64;
       }catch(e){
         console.error(e);
-        alert("Помилка звернення до API");
-        refineBtn.disabled=false; refineBtn.textContent="Уточнити маску (Auto)";
+        alert("Не вдалося уточнити маску. Перевір API_URL у коді.");
+        refineBtn.disabled = false; refineBtn.textContent = "Уточнити маску (Auto)";
       }
     }
-    refineBtn.addEventListener("click", refineMaskOnServer);
+    refineBtn.addEventListener('click', refineMaskOnServer);
 
+    // РЕАГУЄМО НА РЕСАЙЗ ВІКНА
+    window.addEventListener('resize', ()=>{ if(hasImage) fitCanvasToViewer(); });
   </script>
 </body>
 </html>
