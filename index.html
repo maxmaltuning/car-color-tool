@@ -5,398 +5,398 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>G-Wagen Interior Tool (MVP)</title>
   <style>
-    :root { --bg:#0f1115; --panel:#171a21; --text:#e6e6e6; --sub:#9aa4b2; --accent:#4da3ff; }
-    * { box-sizing: border-box; }
-    body { margin:0; background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; }
-    header { padding:14px 18px; border-bottom:1px solid #252a33; display:flex; gap:10px; align-items:center; }
-    header h1 { font-size:16px; margin:0; font-weight:600; letter-spacing:.3px; }
-    .wrap { display:flex; gap:16px; padding:16px; }
-    .left, .right { background:var(--panel); border:1px solid #222833; border-radius:12px; padding:12px; }
-    .left { flex:1; min-height:70vh; display:flex; flex-direction:column; }
-    .right { width:340px; }
-    .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .toolbar label { font-size:12px; color:var(--sub); }
-    .toolbar .group { display:flex; align-items:center; gap:8px; background:#12151b; border:1px solid #222833; padding:6px 8px; border-radius:10px; }
-    .btn { background:#1e2430; border:1px solid #2a3240; color:#e9eef6; border-radius:10px; padding:8px 12px; cursor:pointer; font-weight:600; }
-    .btn:hover { border-color:#3a465a; }
-    .btn.accent { background:var(--accent); border-color:#67b0ff; color:#081321; }
-    .btn.ghost { background:transparent; border:1px dashed #3a465a; color:#bcd2ff; }
-    .frame { position:relative; flex:1; margin-top:12px; background:#0a0d12; border:1px solid #222833; border-radius:12px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
-    canvas { max-width:100%; max-height:100%; image-rendering: auto; }
-    .stack { position:relative; }
-    .note { font-size:12px; color:#94a3b8; margin-top:6px; }
-    .row { display:flex; gap:8px; align-items:center; margin:8px 0; }
-    select, input[type="color"], input[type="range"] { background:#0f1320; color:#e6e6e6; border:1px solid #2a3240; border-radius:8px; padding:6px 8px; }
-    input[type="range"]{ width:100%; }
-    .sec-title { font-size:12px; color:#9aa4b2; text-transform:uppercase; letter-spacing:.1em; margin:14px 0 8px; }
-    .pattern-preview { height:28px; border-radius:8px; border:1px solid #2a3240; background:#0f1320; display:flex; align-items:center; justify-content:center; font-size:11px; color:#9aa4b2; }
-    .small { font-size:12px; color:#aab4c3; }
-    .ok { color:#7cf29a; font-weight:600; display:none; }
+    :root{--bg:#0f1115;--panel:#171a21;--text:#e6e6e6;--sub:#9aa4b2;--accent:#4da3ff}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    header{padding:14px 18px;border-bottom:1px solid #252a33;display:flex;gap:10px;align-items:center}
+    header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.3px}
+    .wrap{display:flex;gap:16px;padding:16px}
+    .left,.right{background:var(--panel);border:1px solid #222833;border-radius:12px;padding:12px}
+    .left{flex:1;min-height:70vh;display:flex;flex-direction:column}
+    .right{width:360px}
+    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .group{display:flex;align-items:center;gap:8px;background:#12151b;border:1px solid #222833;padding:6px 8px;border-radius:10px}
+    .btn{background:#1e2430;border:1px solid #2a3240;color:#e9eef6;border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:600}
+    .btn:hover{border-color:#3a465a}.btn.accent{background:var(--accent);border-color:#67b0ff;color:#081321}
+    .btn.ghost{background:transparent;border:1px dashed #3a465a;color:#bcd2ff}
+    .frame{position:relative;flex:1;margin-top:12px;background:#0a0d12;border:1px solid #222833;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+    canvas{max-width:100%;max-height:100%;image-rendering:auto}
+    .note{font-size:12px;color:#94a3b8;margin-top:6px}
+    .row{display:flex;gap:8px;align-items:center;margin:8px 0}
+    select,input[type="color"],input[type="range"],input[type="number"]{background:#0f1320;color:#e6e6e6;border:1px solid #2a3240;border-radius:8px;padding:6px 8px}
+    input[type="range"]{width:100%}
+    .sec-title{font-size:12px;color:#9aa4b2;text-transform:uppercase;letter-spacing:.1em;margin:14px 0 8px}
+    .small{font-size:12px;color:#aab4c3}.ok{color:#7cf29a;font-weight:600;display:none}
+    .tooltog label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-size:12px;color:#c7d2e1}
   </style>
+
+  <!-- OpenCV.js для Magic/GrabCut -->
+  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <script>
+    window.cvReady = new Promise(res=>{
+      if (window.cv && cv.getBuildInformation) return res();
+      document.addEventListener('opencvready', res);
+    });
+  </script>
 </head>
 <body>
-  <header>
-    <h1>G-Wagen Interior Tool — MVP (логічні деталі, зміни тільки в масці)</h1>
-  </header>
+<header><h1>G-Wagen Interior Tool — логічне виділення + зміни тільки в масці</h1></header>
 
-  <div class="wrap">
-    <div class="left">
-      <div class="toolbar">
-        <div class="group">
-          <label>Фото:</label>
-          <input id="file" type="file" accept="image/*" />
-        </div>
-        <div class="group">
-          <label>Авто:</label>
-          <select id="model">
-            <option value="g-wagen" selected>G-Wagen (W463)</option>
-          </select>
-        </div>
-        <div class="group">
-          <label>Деталь:</label>
-          <select id="part">
-            <option value="door_insert" selected>Дверна вставка</option>
-            <option value="door_upper">Верх дверної карти</option>
-            <option value="armrest">Підлокітник</option>
-            <option value="door_lower">Нижня частина</option>
-          </select>
-        </div>
-        <button id="fitBtn" class="btn">Підігнати маску</button>
-        <button id="clearMask" class="btn ghost">Очистити маску</button>
-      </div>
-
-      <div class="frame">
-        <div class="stack">
-          <canvas id="photo"></canvas>
-          <canvas id="mask"></canvas>
-          <canvas id="render"></canvas>
-        </div>
-      </div>
-      <div class="note">Порада: спочатку завантаж фото. Потім обери деталь і підженiть маску повзунками в панелі справа.</div>
-    </div>
-
-    <div class="right">
-      <div class="sec-title">Підігнати маску (під твоє фото)</div>
-      <div class="row"><span class="small">Зсув X</span><input id="sx" type="range" min="-400" max="400" value="0"></div>
-      <div class="row"><span class="small">Зсув Y</span><input id="sy" type="range" min="-400" max="400" value="0"></div>
-      <div class="row"><span class="small">Масштаб</span><input id="sc" type="range" min="20" max="300" value="100"></div>
-      <div class="row"><span class="small">Поворот</span><input id="rot" type="range" min="-45" max="45" value="0"></div>
-
-      <div class="sec-title">Колір та матеріал</div>
-      <div class="row"><span class="small">Колір</span><input id="color" type="color" value="#b72828"></div>
-      <div class="row"><span class="small">Інтенсивність кольору</span><input id="intensity" type="range" min="0" max="100" value="65"></div>
-      <div class="row"><span class="small">Глянець (блиск)</span><input id="gloss" type="range" min="0" max="100" value="20"></div>
-
-      <div class="sec-title">Перфорація / Візерунки</div>
-      <div class="row">
-        <select id="pattern">
-          <option value="none" selected>Без патерну</option>
-          <option value="perforation">Перфорація</option>
-          <option value="diamonds">Ромби / шви</option>
-          <option value="stitch">Паралельні шви</option>
+<div class="wrap">
+  <div class="left">
+    <div class="toolbar">
+      <div class="group"><label>Фото:</label><input id="file" type="file" accept="image/*"></div>
+      <div class="group"><label>Авто:</label><select id="model"><option value="g-wagen" selected>G-Wagen</option></select></div>
+      <div class="group"><label>Деталь:</label>
+        <select id="part">
+          <option value="door_insert" selected>Дверна вставка</option>
+          <option value="door_upper">Верх дверної карти</option>
+          <option value="armrest">Підлокітник</option>
+          <option value="door_lower">Нижня частина</option>
         </select>
       </div>
-      <div class="row"><span class="small">Сила патерну</span><input id="pstrength" type="range" min="0" max="100" value="60"></div>
-      <div class="pattern-preview" id="ppv">Попередній перегляд патерну</div>
-
-      <div class="sec-title">Дії</div>
-      <div class="row">
-        <button id="apply" class="btn accent">Застосувати до деталі</button>
-        <button id="save" class="btn">ОК (зберегти приклад)</button>
+      <div class="group tooltog">
+        <label><input type="radio" name="tool" value="magic" checked> Клік (Magic)</label>
+        <label><input type="radio" name="tool" value="pen"> Пензлик</label>
+        <label><input type="radio" name="tool" value="eraser"> Гумка</label>
       </div>
-      <div id="saved" class="ok">Збережено ✅ (надалі це навчить AI)</div>
+      <div class="group"><label class="small">Кисть</label><input id="brush" type="range" min="6" max="80" value="32"></div>
+      <div class="group"><label class="small">Толерантність</label><input id="tol" type="range" min="5" max="40" value="14"></div>
+      <button id="refine" class="btn">Уточнити маску (Auto)</button>
+      <button id="clear" class="btn ghost">Очистити маску</button>
+      <div class="group"><label><input id="showMask" type="checkbox"> Показати маску</label></div>
     </div>
+
+    <div class="frame">
+      <div class="stack">
+        <canvas id="photo"></canvas>
+        <canvas id="render"></canvas>
+        <canvas id="mask"></canvas>
+      </div>
+    </div>
+    <div class="note">Як користуватись: 1) Завантаж фото. 2) Вибери “Клік (Magic)” і натисни по потрібному елементу — маска зʼявиться. 3) Дорисуй Пензликом/Гумкою. 4) Натисни “Уточнити маску (Auto)”. 5) Застосуй колір/матеріал справа.</div>
   </div>
 
-  <script>
-    // ======= Канваси =======
-    const photo = document.getElementById('photo');
-    const mask = document.getElementById('mask');
-    const render = document.getElementById('render');
-    const pctx = photo.getContext('2d');
-    const mctx = mask.getContext('2d');
-    const rctx = render.getContext('2d');
+  <div class="right">
+    <div class="sec-title">Підігнати шаблон (опц.)</div>
+    <div class="row small">Можеш спершу накинути грубу маску: натисни в 2-3 місця на деталі (Magic), потім “Уточнити”.</div>
 
-    // ======= Елементи UI =======
-    const file = document.getElementById('file');
-    const partSel = document.getElementById('part');
-    const sx = document.getElementById('sx');
-    const sy = document.getElementById('sy');
-    const sc = document.getElementById('sc');
-    const rot = document.getElementById('rot');
-    const color = document.getElementById('color');
-    const intensity = document.getElementById('intensity');
-    const gloss = document.getElementById('gloss');
-    const pattern = document.getElementById('pattern');
-    const pstrength = document.getElementById('pstrength');
-    const ppv = document.getElementById('ppv');
-    const fitBtn = document.getElementById('fitBtn');
-    const clearMaskBtn = document.getElementById('clearMask');
-    const applyBtn = document.getElementById('apply');
-    const saveBtn = document.getElementById('save');
-    const saved = document.getElementById('saved');
+    <div class="sec-title">Колір та матеріал</div>
+    <div class="row"><span class="small">Колір</span><input id="color" type="color" value="#b72828"></div>
+    <div class="row"><span class="small">Інтенсивність</span><input id="intensity" type="range" min="0" max="100" value="65"></div>
+    <div class="row"><span class="small">Глянець</span><input id="gloss" type="range" min="0" max="100" value="20"></div>
 
-    let img = new Image();
-    let hasImage = false;
+    <div class="sec-title">Перфорація / Візерунки</div>
+    <div class="row">
+      <select id="pattern">
+        <option value="none">Без патерну</option>
+        <option value="perforation">Перфорація</option>
+        <option value="diamonds">Ромби / шви</option>
+        <option value="stitch">Паралельні шви</option>
+      </select>
+    </div>
+    <div class="row"><span class="small">Сила патерну</span><input id="pstrength" type="range" min="0" max="100" value="60"></div>
 
-    // ======= Простi "шаблонні" маски для G-Wagen (полігони) =======
-    // Координати (нормалізовані 0..1) під горизонтальне фото дверей.
-    const GWAGEN_MASKS = {
-      door_insert: [ [0.12,0.48],[0.78,0.40],[0.82,0.52],[0.16,0.60] ],
-      door_upper:  [ [0.07,0.32],[0.86,0.24],[0.88,0.34],[0.09,0.42] ],
-      armrest:     [ [0.34,0.62],[0.70,0.58],[0.69,0.68],[0.33,0.72] ],
-      door_lower:  [ [0.08,0.70],[0.90,0.64],[0.92,0.88],[0.06,0.90] ],
+    <div class="sec-title">Дії</div>
+    <div class="row">
+      <button id="apply" class="btn accent">Застосувати до деталі</button>
+      <button id="save" class="btn">ОК (зберегти приклад)</button>
+    </div>
+    <div id="saved" class="ok">Збережено ✅ (це навчить AI у наступних версіях)</div>
+  </div>
+</div>
+
+<script>
+  // ==== Канваси ====
+  const photo = document.getElementById('photo');
+  const render = document.getElementById('render');
+  const mask = document.getElementById('mask');
+  const pctx = photo.getContext('2d');
+  const rctx = render.getContext('2d');
+  const mctx = mask.getContext('2d');
+
+  // ==== UI ====
+  const file = document.getElementById('file');
+  const toolRadios = [...document.querySelectorAll('input[name="tool"]')];
+  const brush = document.getElementById('brush');
+  const tol = document.getElementById('tol');
+  const refineBtn = document.getElementById('refine');
+  const clearBtn = document.getElementById('clear');
+  const showMask = document.getElementById('showMask');
+
+  const color = document.getElementById('color');
+  const intensity = document.getElementById('intensity');
+  const gloss = document.getElementById('gloss');
+  const pattern = document.getElementById('pattern');
+  const pstrength = document.getElementById('pstrength');
+  const applyBtn = document.getElementById('apply');
+  const saveBtn = document.getElementById('save');
+  const saved = document.getElementById('saved');
+
+  let hasImage = false, drawing = false, curTool = 'magic';
+
+  function resizeCanvases(w,h){
+    [photo, render, mask].forEach(c => { c.width = w; c.height = h; });
+    mctx.clearRect(0,0,mask.width, mask.height);
+    rctx.clearRect(0,0,render.width, render.height);
+  }
+
+  // Завантаж фото
+  file.addEventListener('change', e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = ()=>{
+      let w = img.naturalWidth, h = img.naturalHeight;
+      const ms = 1400, m = Math.max(w,h);
+      if(m>ms){ const s = ms/m; w=Math.round(w*s); h=Math.round(h*s); }
+      resizeCanvases(w,h);
+      pctx.drawImage(img,0,0,w,h);
+      hasImage = true;
+      drawPreview();
     };
+    img.src = url;
+  });
 
-    function resizeCanvases(w,h){
-      [photo, mask, render].forEach(c => { c.width = w; c.height = h; });
-      mctx.clearRect(0,0,mask.width,mask.height);
-      rctx.clearRect(0,0,render.width,render.height);
+  // Який інструмент
+  toolRadios.forEach(r=> r.addEventListener('change', ()=>{
+    curTool = toolRadios.find(x=>x.checked).value;
+  }));
+
+  // Допоміжне: координати кліку в системі канваса
+  function getPos(evt, canvas){
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: Math.round((evt.clientX - rect.left) * scaleX),
+      y: Math.round((evt.clientY - rect.top) * scaleY)
+    };
+  }
+
+  // Малювання пензлем/гумкою по масці
+  mask.addEventListener('pointerdown', e=>{
+    if(!hasImage) return;
+    const pos = getPos(e, mask);
+    if(curTool === 'magic'){
+      magicFillAt(pos.x, pos.y, parseInt(tol.value,10)).then(()=>{ drawPreview(); });
+      return;
     }
+    drawing = true;
+    drawDot(pos.x, pos.y);
+  });
+  mask.addEventListener('pointermove', e=>{
+    if(!drawing || !hasImage) return;
+    const pos = getPos(e, mask);
+    drawDot(pos.x, pos.y);
+  });
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=>{
+    mask.addEventListener(ev, ()=>{ drawing=false; applyIfAuto(); });
+  });
 
-    // Завантаження фото
-    file.addEventListener('change', async (e)=>{
-      const f = e.target.files[0];
-      if(!f) return;
-      const url = URL.createObjectURL(f);
-      img = new Image();
-      img.onload = ()=>{
-        // Обмежимо довшу сторону ~1400px для швидкості
-        const maxSide = 1400;
-        let w = img.naturalWidth, h = img.naturalHeight;
-        const m = Math.max(w,h);
-        if(m > maxSide){ const s = maxSide/m; w = Math.round(w*s); h = Math.round(h*s); }
-        resizeCanvases(w,h);
-        pctx.drawImage(img, 0, 0, w, h);
-        hasImage = true;
-        // Скидаємо маску
-        mctx.clearRect(0,0,mask.width,mask.height);
-      };
-      img.src = url;
-    });
+  function drawDot(x,y){
+    const b = parseInt(brush.value,10);
+    mctx.globalCompositeOperation = (curTool==='eraser') ? 'destination-out' : 'source-over';
+    mctx.fillStyle = 'rgba(255,255,255,1)';
+    mctx.beginPath(); mctx.arc(x,y,b/2,0,Math.PI*2); mctx.fill();
+    mctx.globalCompositeOperation = 'source-over';
+    drawPreview();
+  }
 
-    // Намалювати полігон-маску з трансформацією
-    function drawMask(){
-      if(!hasImage) return;
-      mctx.clearRect(0,0,mask.width,mask.height);
-      const verts = GWAGEN_MASKS[partSel.value] || GWAGEN_MASKS.door_insert;
+  clearBtn.addEventListener('click', ()=>{
+    mctx.clearRect(0,0,mask.width,mask.height);
+    drawPreview();
+  });
 
-      // параметри трансформації
-      const dx = parseInt(sx.value,10);
-      const dy = parseInt(sy.value,10);
-      const scale = parseInt(sc.value,10)/100;
-      const angle = parseInt(rot.value,10) * Math.PI/180;
+  showMask.addEventListener('change', drawPreview);
 
-      // центр зображення
-      const cx = mask.width/2;
-      const cy = mask.height/2;
+  // ========== MAGIC FILL (edge-aware flood fill з OpenCV.js) ==========
+  async function magicFillAt(x, y, tolerance=14){
+    await window.cvReady;
+    const w = photo.width, h = photo.height;
 
-      mctx.save();
-      mctx.translate(cx + dx, cy + dy);
-      mctx.rotate(angle);
-      mctx.scale(scale, scale);
+    const src = cv.imread(photo);  // RGBA->RGB
+    cv.cvtColor(src, src, cv.COLOR_RGBA2RGB);
 
-      // базова ширина/висота для нормалізації (беремо ширину фото як 1.0 одиницю)
-      const baseW = mask.width;
-      const baseH = mask.height;
+    // Маска для floodFill (на 2 пікселі більше)
+    const ffMask = new cv.Mat.zeros(h+2, w+2, cv.CV_8UC1);
+    const lo = new cv.Scalar(tolerance,tolerance,tolerance,0);
+    const hi = new cv.Scalar(tolerance,tolerance,tolerance,0);
+    const seed = new cv.Point(x,y);
 
-      mctx.beginPath();
-      verts.forEach(([nx,ny], i)=>{
-        const x = (nx - 0.5) * baseW; // центруємо полігон
-        const y = (ny - 0.5) * baseH;
-        if(i===0) mctx.moveTo(x,y); else mctx.lineTo(x,y);
-      });
-      mctx.closePath();
-      // малюємо у альфа-канал: заливаємо білим і робимо альфу 255
-      mctx.fillStyle = "rgba(255,255,255,1)";
-      mctx.fill();
+    const dst = new cv.Mat();
+    src.copyTo(dst);
+    cv.floodFill(dst, ffMask, seed, new cv.Scalar(255,255,255,255),
+                 new cv.Rect(), lo, hi, (4 | (255<<8)));
 
-      mctx.restore();
-    }
-
-    // Попередній перегляд патерну (тільки підказка)
-    function updatePatternPreview(){
-      const p = pattern.value;
-      ppv.textContent = p === "none" ? "Без патерну" :
-                        p === "perforation" ? "Перфорація" :
-                        p === "diamonds" ? "Ромби/шви" :
-                        "Паралельні шви";
-    }
-
-    // Генерація патерн-канвасу
-    function makePatternCanvas(w,h, kind, strength){
-      const c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      const ctx = c.getContext('2d');
-      ctx.clearRect(0,0,w,h);
-
-      const alpha = Math.max(0, Math.min(1, strength/100));
-
-      if(kind === 'perforation'){
-        // дрібні кола (перфорація)
-        const step = 18;
-        ctx.fillStyle = `rgba(0,0,0,${0.6*alpha})`;
-        for(let y=step/2; y<h; y+=step){
-          for(let x=step/2; x<w; x+=step){
-            ctx.beginPath();
-            ctx.arc(x,y,2,0,Math.PI*2);
-            ctx.fill();
-          }
-        }
-      } else if(kind === 'diamonds'){
-        // ромбова прострочка: світла/темна лінії
-        const step = 40;
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = `rgba(255,255,255,${0.35*alpha})`;
-        for(let i=-h; i<w+h; i+=step){
-          ctx.beginPath();
-          ctx.moveTo(i,0);
-          ctx.lineTo(i-h,h);
-          ctx.stroke();
-        }
-        ctx.strokeStyle = `rgba(0,0,0,${0.45*alpha})`;
-        for(let i=0; i<w+h; i+=step){
-          ctx.beginPath();
-          ctx.moveTo(i,0);
-          ctx.lineTo(i+h,h);
-          ctx.stroke();
-        }
-      } else if(kind === 'stitch'){
-        // паралельні “шви”
-        const step = 26;
-        ctx.strokeStyle = `rgba(255,255,255,${0.35*alpha})`;
-        ctx.lineWidth = 1.2;
-        for(let y=10; y<h; y+=step){
-          ctx.beginPath();
-          ctx.moveTo(0,y);
-          ctx.lineTo(w,y);
-          ctx.stroke();
-        }
-        ctx.strokeStyle = `rgba(0,0,0,${0.35*alpha})`;
-        for(let y=10; y<h; y+=step){
-          ctx.beginPath();
-          ctx.moveTo(0,y+3);
-          ctx.lineTo(w,y+3);
-          ctx.stroke();
-        }
-      }
-      return c;
-    }
-
-    // Застосувати до деталі (рендерінг тільки всередині маски)
-    function applyToPart(){
-      if(!hasImage) return;
-      // відмалюємо основу фото
-      rctx.clearRect(0,0,render.width,render.height);
-      rctx.drawImage(photo, 0, 0);
-
-      // беремо бінарну маску з маска-канвасу (альфа > 0)
-      const w = render.width, h = render.height;
-      const maskImg = mctx.getImageData(0,0,w,h);
-      const baseImg = pctx.getImageData(0,0,w,h);
-      const out = rctx.getImageData(0,0,w,h);
-
-      // колір та інтенсивність
-      const col = hexToRgb(color.value);
-      const k = Math.max(0, Math.min(1, intensity.value/100));
-      const glossK = Math.max(0, Math.min(1, gloss.value/100));
-
-      // зробимо патерн
-      const pat = makePatternCanvas(w,h, pattern.value, pstrength.value);
-
-      // обхід пікселів
-      for(let i=0;i<out.data.length;i+=4){
-        const a = maskImg.data[i+3]; // альфа маски
-        if(a>0){
-          // оригінал
-          const r0 = baseImg.data[i], g0 = baseImg.data[i+1], b0 = baseImg.data[i+2];
-          // лайтнес зберігаємо, колір змішуємо
-          const r1 = Math.round((1-k)*r0 + k*col.r);
-          const g1 = Math.round((1-k)*g0 + k*col.g);
-          const b1 = Math.round((1-k)*b0 + k*col.b);
-          out.data[i] = r1; out.data[i+1] = g1; out.data[i+2] = b1; out.data[i+3] = 255;
-        }else{
-          // поза маскою — лишаємо як було
-          out.data[i] = baseImg.data[i];
-          out.data[i+1] = baseImg.data[i+1];
-          out.data[i+2] = baseImg.data[i+2];
-          out.data[i+3] = 255;
-        }
-      }
-      rctx.putImageData(out, 0, 0);
-
-      // глянець: легка “спека” по освітленню (простий трюк)
-      if(glossK>0){
-        rctx.globalCompositeOperation = "overlay";
-        rctx.fillStyle = `rgba(255,255,255,${0.10*glossK})`;
-        rctx.fillRect(0,0,w,h);
-        rctx.globalCompositeOperation = "source-over";
-      }
-
-      // патерн тільки в масці
-      if(pattern.value!=="none"){
-        rctx.save();
-        // зробимо clip з маски
-        const path = alphaMaskToPath(maskImg, w, h);
-        if(path){
-          rctx.clip(path);
-          rctx.drawImage(pat, 0, 0);
-        }
-        rctx.restore();
+    // Переносимо область у бінарну маску
+    const region = new cv.Mat(h, w, cv.CV_8UC1);
+    for(let r=0; r<h; r++){
+      for(let c=0; c<w; c++){
+        region.ucharPtr(r,c)[0] = ffMask.ucharPtr(r+1,c+1)[0] ? 255 : 0;
       }
     }
+    // трохи ерозії — щоб не лізла за краї
+    const kernel = cv.Mat.ones(3,3,cv.CV_8U);
+    cv.erode(region, region, kernel);
 
-    function hexToRgb(hex){
-      const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-      return m ? { r:parseInt(m[1],16), g:parseInt(m[2],16), b:parseInt(m[3],16) } : {r:200,g:0,b:0};
+    // додати в маску (альфа)
+    const mImg = mctx.getImageData(0,0,w,h);
+    for(let i=0, j=0; j<region.data.length; i+=4, j++){
+      const add = region.data[j];
+      const a = mImg.data[i+3];
+      mImg.data[i] = 255; mImg.data[i+1]=255; mImg.data[i+2]=255;
+      mImg.data[i+3] = Math.max(a, add);
     }
+    mctx.putImageData(mImg,0,0);
 
-    // Перетворюємо альфа-маску в Path2D (дуже просте наближення контура)
-    function alphaMaskToPath(imgData, w, h){
-      // Занадто складна задача для ідеалу; для MVP зробимо грубий контур:
-      // візьмемо “рамку” маски (мін/макс X,Y), і намалюємо clip з неї + внутрішні деталі вигладиламо.
-      // (Пізніше замінимо на marching squares)
-      let minx=w, maxx=0, miny=h, maxy=0;
-      const a = imgData.data;
-      for(let y=0;y<h;y++){
-        for(let x=0;x<w;x++){
-          const i = (y*w + x)*4 + 3;
-          if(a[i]>0){ if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y; }
-        }
+    // прибирання
+    src.delete(); dst.delete(); ffMask.delete(); region.delete(); kernel.delete();
+  }
+
+  // ========== Уточнення країв (GrabCut) ==========
+  async function refineMaskClient(){
+    await window.cvReady;
+    const w = photo.width, h = photo.height;
+    const src = cv.imread(photo); cv.cvtColor(src, src, cv.COLOR_RGBA2RGB);
+
+    // беремо поточну альфа-маску
+    const maskImg = mctx.getImageData(0,0,w,h);
+    const gcMask = new cv.Mat(h, w, cv.CV_8UC1);
+    for(let i=0, j=0; j<w*h; i+=4, j++){
+      const a = maskImg.data[i+3];
+      gcMask.data[j] = a>0 ? 3 : 2; // 3 = ймовірний передній план, 2 = ймовірний фон
+    }
+    const bg = new cv.Mat(), fg = new cv.Mat();
+    const rect = new cv.Rect(0,0,w,h);
+    cv.grabCut(src, gcMask, rect, bg, fg, 5, cv.GC_INIT_WITH_MASK);
+
+    // отримати бінарну маску
+    const result = new cv.Mat(h,w,cv.CV_8UC1);
+    for(let j=0; j<w*h; j++){
+      const v = gcMask.data[j];
+      result.data[j] = (v===1 || v===3) ? 255 : 0;
+    }
+    const kernel = cv.Mat.ones(3,3,cv.CV_8U);
+    cv.morphologyEx(result, result, cv.MORPH_CLOSE, kernel);
+
+    // покласти назад в маску (альфа)
+    const out = mctx.createImageData(w,h);
+    for(let i=0, j=0; j<w*h; i+=4, j++){
+      out.data[i]=255; out.data[i+1]=255; out.data[i+2]=255; out.data[i+3]=result.data[j];
+    }
+    mctx.putImageData(out,0,0);
+
+    // clean
+    src.delete(); gcMask.delete(); bg.delete(); fg.delete(); result.delete(); kernel.delete();
+  }
+
+  refineBtn.addEventListener('click', async ()=>{
+    if(!hasImage) return;
+    refineMaskClient().then(()=> drawPreview());
+  });
+
+  function applyIfAuto(){ drawPreview(); }
+
+  // ========== Рендерінг результату ==========
+  function hexToRgb(hex){ const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return m?{r:parseInt(m[1],16),g:parseInt(m[2],16),b:parseInt(m[3],16)}:{r:200,g:0,b:0}}
+  function makePatternCanvas(w,h, kind, strength){
+    const c=document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d'); ctx.clearRect(0,0,w,h);
+    const a=Math.max(0,Math.min(1,strength/100));
+    if(kind==='perforation'){
+      const step=18; ctx.fillStyle=`rgba(0,0,0,${0.6*a})`;
+      for(let y=step/2;y<h;y+=step) for(let x=step/2;x<w;x+=step){ ctx.beginPath(); ctx.arc(x,y,2,0,Math.PI*2); ctx.fill(); }
+    }else if(kind==='diamonds'){
+      const step=40; ctx.lineWidth=1; ctx.strokeStyle=`rgba(255,255,255,${0.35*a})`;
+      for(let i=-h;i<w+h;i+=step){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i-h,h); ctx.stroke(); }
+      ctx.strokeStyle=`rgba(0,0,0,${0.45*a})`;
+      for(let i=0;i<w+h;i+=step){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i+h,h); ctx.stroke(); }
+    }else if(kind==='stitch'){
+      const step=26; ctx.strokeStyle=`rgba(255,255,255,${0.35*a})`; ctx.lineWidth=1.2;
+      for(let y=10;y<h;y+=step){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+      ctx.strokeStyle=`rgba(0,0,0,${0.35*a})`;
+      for(let y=10;y<h;y+=step){ ctx.beginPath(); ctx.moveTo(0,y+3); ctx.lineTo(w,y+3); ctx.stroke(); }
+    }
+    return c;
+  }
+
+  function drawPreview(){
+    if(!hasImage){ rctx.clearRect(0,0,render.width,render.height); return; }
+    const w=render.width, h=render.height;
+    rctx.clearRect(0,0,w,h);
+    rctx.drawImage(photo,0,0);
+
+    // застосувати колір всередині маски
+    const base=pctx.getImageData(0,0,w,h);
+    const mimg=mctx.getImageData(0,0,w,h);
+    const out=rctx.getImageData(0,0,w,h);
+
+    const col=hexToRgb(color.value);
+    const k=Math.max(0,Math.min(1,intensity.value/100));
+    for(let i=0;i<out.data.length;i+=4){
+      const a=mimg.data[i+3];
+      if(a>0){
+        const r0=base.data[i], g0=base.data[i+1], b0=base.data[i+2];
+        out.data[i]=Math.round((1-k)*r0 + k*col.r);
+        out.data[i+1]=Math.round((1-k)*g0 + k*col.g);
+        out.data[i+2]=Math.round((1-k)*b0 + k*col.b);
+        out.data[i+3]=255;
+      }else{
+        out.data[i]=base.data[i]; out.data[i+1]=base.data[i+1]; out.data[i+2]=base.data[i+2]; out.data[i+3]=255;
       }
-      if(minx>=maxx || miny>=maxy) return null;
-      const path = new Path2D();
-      path.rect(minx, miny, (maxx-minx), (maxy-miny));
-      return path;
+    }
+    rctx.putImageData(out,0,0);
+
+    // глянець
+    const glossK=Math.max(0,Math.min(1,gloss.value/100));
+    if(glossK>0){
+      rctx.globalCompositeOperation="overlay";
+      rctx.fillStyle=`rgba(255,255,255,${0.10*glossK})`;
+      rctx.fillRect(0,0,w,h);
+      rctx.globalCompositeOperation="source-over";
     }
 
-    // Події
-    [partSel, sx, sy, sc, rot].forEach(el => el.addEventListener('input', ()=>{ drawMask(); }));
-    fitBtn.addEventListener('click', ()=>{ drawMask(); });
-    clearMaskBtn.addEventListener('click', ()=>{
-      mctx.clearRect(0,0,mask.width,mask.height);
-      rctx.clearRect(0,0,render.width,render.height);
-      sx.value=0; sy.value=0; sc.value=100; rot.value=0;
-    });
+    // патерн лише в масці
+    if(pattern.value!=='none'){
+      const pat=makePatternCanvas(w,h,pattern.value,pstrength.value);
+      // зробимо clip прям по альфі: простий трюк — використовуємо маску як глобальну альфу
+      const tmp=document.createElement('canvas'); tmp.width=w; tmp.height=h; const tctx=tmp.getContext('2d');
+      // намалюємо маску у tmp як альфа
+      const mOnly=new ImageData(w,h);
+      for(let i=0;i<mOnly.data.length;i+=4){
+        mOnly.data[i]=0; mOnly.data[i+1]=0; mOnly.data[i+2]=0; mOnly.data[i+3]=mimg.data[i+3];
+      }
+      tctx.putImageData(mOnly,0,0);
+      rctx.save();
+      rctx.globalCompositeOperation="destination-in"; // лишаємо тільки те, де є альфа
+      rctx.drawImage(tmp,0,0);
+      rctx.restore();
+      rctx.drawImage(pat,0,0);
+    }
 
-    [color, intensity, gloss, pattern, pstrength].forEach(el=>{
-      el.addEventListener('input', ()=>{ updatePatternPreview(); applyToPart(); });
-    });
+    // показати синю підсвітку маски (для зручності)
+    if(showMask.checked){
+      rctx.save();
+      rctx.globalAlpha=0.35;
+      rctx.globalCompositeOperation="source-over";
+      const blue=new ImageData(w,h);
+      for(let i=0;i<blue.data.length;i+=4){
+        blue.data[i]=30; blue.data[i+1]=80; blue.data[i+2]=255; blue.data[i+3]=mimg.data[i+3];
+      }
+      rctx.putImageData(blue,0,0);
+      rctx.restore();
+    }
+  }
 
-    applyBtn.addEventListener('click', ()=>{ applyToPart(); });
+  // Кнопки
+  applyBtn.addEventListener('click', drawPreview);
+  saveBtn.addEventListener('click',()=>{
+    saved.style.display='inline';
+    setTimeout(()=> saved.style.display='none', 1800);
+  });
 
-    saveBtn.addEventListener('click', ()=>{
-      // Тут пізніше відправимо (фото + маску + part) у бекенд для навчання.
-      // Зараз просто показуємо, що “збережено”.
-      saved.style.display = 'inline';
-      setTimeout(()=> saved.style.display = 'none', 2000);
-    });
-
-    updatePatternPreview();
-
-    // При старті — порожні канваси
-    resizeCanvases(1200, 720);
-
-  </script>
+  // Стартові розміри
+  (function init(){ resizeCanvases(1200,720); })();
+</script>
 </body>
 </html>
