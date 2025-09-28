@@ -2,322 +2,215 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Car Color Tool</title>
   <style>
     :root { --accent:#ff6600; }
-    *{box-sizing:border-box}
-    body{margin:0;background:#0d0d0d;color:#fff;font-family:Arial, sans-serif}
-    .wrap{max-width:1100px;margin:0 auto;padding:16px}
-    h1{margin:8px 0 14px;font-size:22px}
-    .card{background:#131313;border:1px solid #242424;border-radius:12px;padding:12px}
-    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-    .btn, input[type="file"]::file-selector-button{
-      background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:14px
+    * { box-sizing: border-box; }
+    body {
+      margin:0; background:#0d0d0d; color:#fff; font-family: Arial, sans-serif;
     }
-    .btn.ghost{background:#242424}
-    .btn.gray{background:#3a3a3a}
-    .btn:hover, input[type="file"]::file-selector-button:hover{filter:brightness(.95)}
-    input[type="color"]{width:44px;height:36px;border:none;background:transparent}
-    input[type="range"]{width:160px}
-    .label{font-size:13px;opacity:.9}
-    .divider{border-color:#232323;margin:10px 0}
-
-    .viewer{
-      position:relative;width:100%;
-      aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;
-      border:2px solid var(--accent);touch-action:none;
+    .wrap { max-width: 960px; margin: 0 auto; padding: 20px; }
+    h1 { margin:10px 0 20px; font-size: 22px; font-weight:700; }
+    .controls {
+      display:flex; flex-wrap: wrap; gap:10px; align-items:center; margin-bottom:12px;
     }
-    .viewer img,.tint,.shadow,.maskCanvas{
-      position:absolute;inset:0;width:100%;height:100%;object-fit:contain
+    .btn, input[type="file"]::file-selector-button {
+      background: var(--accent); color:#fff; border:none; padding:10px 16px;
+      border-radius:8px; font-size:14px; cursor:pointer;
     }
-    .tint{mix-blend-mode:color;opacity:0;pointer-events:none}
-    .shadow{mix-blend-mode:multiply;opacity:0;pointer-events:none}
-    /* Полотно невидиме, але приймає кліки (можна увімкнути показ) */
-    .maskCanvas{pointer-events:auto;background:transparent;opacity:0; cursor: crosshair;}
-    .hint{font-size:12px;opacity:.7;margin-top:8px}
-    .mode{padding:6px 10px;border-radius:8px;background:#242424;display:flex;gap:6px}
-    .mode input{accent-color:var(--accent)}
-    .spacer{flex:1}
-    .kbd{background:#242424;border-radius:6px;padding:2px 6px;font-size:12px;margin-left:6px}
+    .btn:hover, input[type="file"]::file-selector-button:hover { filter: brightness(0.95); }
+    .card { background:#131313; border:1px solid #242424; border-radius:12px; padding:14px; }
+    .viewer {
+      position: relative; width: 100%;
+      aspect-ratio: 16/9;
+      background:#000; border-radius:10px; overflow:hidden; border:2px solid var(--accent);
+    }
+    .viewer img, .viewer .tint {
+      position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+    }
+    .tint { mix-blend-mode: color; opacity: 0; pointer-events:none; }
+    .maskCanvas {
+      position:absolute; inset:0; width:100%; height:100%;
+      pointer-events:auto; background: transparent;
+    }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .label { font-size:13px; opacity:.9; }
+    input[type="color"] { width:44px; height:36px; padding:0; border:none; background:transparent; }
+    input[type="range"] { width: 160px; }
+    .hint { font-size:12px; opacity:.7; margin-top:8px; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Car Color Tool</h1>
 
-    <!-- ПАНЕЛЬ 1: фото + дії -->
-    <div class="card" style="margin-bottom:10px">
+    <div class="controls card">
       <div class="row">
-        <input type="file" id="fileInput" accept="image/*"/>
+        <input type="file" id="fileInput" accept="image/*" />
         <button id="resetBtn" class="btn">Скинути налаштування</button>
-        <button id="clearMask" class="btn ghost">Очистити виділення</button>
-
-        <div class="spacer"></div>
-
-        <button id="undoBtn" class="btn gray" title="Ctrl/Cmd + Z">Скасувати</button>
-        <button id="redoBtn" class="btn gray" title="Ctrl/Cmd + Shift + Z">Повторити</button>
-        <button id="saveMaskBtn" class="btn">Зберегти маску (PNG)</button>
+        <button id="clearBtn" class="btn">Очистити виділення</button>
+        <button id="refineBtn" class="btn">Уточнити маску (Auto)</button>
       </div>
 
-      <hr class="divider">
+      <hr style="border-color:#222; margin:12px 0;">
 
-      <!-- ПАНЕЛЬ 2: колір/інтенсивність -->
       <div class="row">
         <span class="label">Колір:</span>
-        <input type="color" id="colorPick" value="#ff6600"/>
+        <input type="color" id="colorPick" value="#ff6600" />
         <span class="label">Інтенсивність:</span>
-        <input type="range" id="strength" min="0" max="100" value="70"/>
-        <span id="strengthVal" class="label">70%</span>
-        <label class="row" style="gap:6px;margin-left:10px">
-          <input type="checkbox" id="keepShadows" checked/>
+        <input type="range" id="strength" min="0" max="100" value="70" />
+        <span class="label" id="strengthVal">70%</span>
+        <label class="row" style="gap:6px;margin-left:12px;">
+          <input type="checkbox" id="keepShadows" checked />
           <span class="label">Зберегти тіні</span>
         </label>
-        <label class="row" style="gap:6px;margin-left:16px">
-          <input type="checkbox" id="showMask"/>
-          <span class="label">Показати маску</span>
-        </label>
       </div>
-
-      <hr class="divider">
-
-      <!-- ПАНЕЛЬ 3: ручне виділення -->
+      <div class="hint">Малюй по фото: білим додаєш (пензлик), чорним стираєш (гумка). Перефарбовується тільки виділена зона.</div>
       <div class="row">
-        <div class="mode">
-          <label class="label"><input type="radio" name="tool" value="brush" checked> Пензлик</label>
-          <label class="label"><input type="radio" name="tool" value="eraser"> Гумка</label>
-        </div>
+        <label><input type="radio" name="tool" value="brush" checked> Пензлик</label>
+        <label><input type="radio" name="tool" value="eraser"> Гумка</label>
         <span class="label">Розмір кисті:</span>
-        <input type="range" id="brushSize" min="5" max="160" value="36"/>
-        <span id="brushVal" class="label">36 px</span>
-      </div>
-      <div class="hint">
-        Малюй по фото: білим додаєш виділення (пензлик), гумкою стираєш. Перефарбовується тільки виділена зона.
-        Швидкі клавіші: <span class="kbd">B</span> пензлик, <span class="kbd">E</span> гумка, <span class="kbd">Ctrl/Cmd + Z</span> скасувати, <span class="kbd">Ctrl/Cmd + Shift + Z</span> повторити.
+        <input type="range" id="brushSize" min="5" max="100" value="30" />
+        <span id="brushVal">30 px</span>
       </div>
     </div>
 
-    <!-- ПЕРЕГЛЯДАЧ -->
     <div class="viewer" id="viewer">
-      <img id="photo" alt="Фото"/>
+      <img id="photo" alt="Фото" />
+      <canvas id="maskCanvas" class="maskCanvas"></canvas>
       <div class="tint" id="tint"></div>
-      <div class="shadow" id="shadow"></div>
-      <canvas id="mask" class="maskCanvas"></canvas>
     </div>
   </div>
 
   <script>
-    // ЕЛЕМЕНТИ
-    const fileInput = document.getElementById('fileInput');
-    const resetBtn = document.getElementById('resetBtn');
-    const clearMaskBtn = document.getElementById('clearMask');
-    const undoBtn = document.getElementById('undoBtn');
-    const redoBtn = document.getElementById('redoBtn');
-    const saveMaskBtn = document.getElementById('saveMaskBtn');
+    const API_URL = "https://car-color-api.onrender.com"; // твій бекенд
 
+    const fileInput = document.getElementById('fileInput');
+    const resetBtn  = document.getElementById('resetBtn');
+    const clearBtn  = document.getElementById('clearBtn');
     const colorPick = document.getElementById('colorPick');
-    const strength = document.getElementById('strength');
+    const strength  = document.getElementById('strength');
     const strengthVal = document.getElementById('strengthVal');
     const keepShadows = document.getElementById('keepShadows');
-    const showMask = document.getElementById('showMask');
-
     const brushSize = document.getElementById('brushSize');
     const brushVal = document.getElementById('brushVal');
-    const toolRadios = document.querySelectorAll('input[name="tool"]');
+    const refineBtn = document.getElementById('refineBtn');
 
     const photo = document.getElementById('photo');
     const tint  = document.getElementById('tint');
-    const shadow= document.getElementById('shadow');
-    const viewer= document.getElementById('viewer');
-    const maskCanvas = document.getElementById('mask');
+    const maskCanvas = document.getElementById('maskCanvas');
     const ctx = maskCanvas.getContext('2d');
 
-    // СТАН
-    let hasImage=false, drawing=false, tool='brush';
-    let undoStack=[], redoStack=[]; // стек історії для маски
+    let drawing = false, tool="brush", hasImage=false;
 
-    // ЗАВАНТАЖЕННЯ ФОТО
-    fileInput.addEventListener('change', ()=>{
-      const f=fileInput.files?.[0]; if(!f) return;
-      const r=new FileReader();
-      r.onload=e=>{
+    // завантаження фото
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        photo.onload = ()=> fitCanvas();
         photo.src = e.target.result;
         hasImage = true;
-        photo.onload = () => {
-          fitCanvasToViewer();
-          clearMask(true); // true — не пушимо в історію порожній стан двічі
-          applyTint();
-        };
       };
-      r.readAsDataURL(f);
+      reader.readAsDataURL(file);
     });
 
-    // РОЗМІР ПОЛОТНА ПІД VIEWER
-    function fitCanvasToViewer(){
-      const rect = viewer.getBoundingClientRect();
-      maskCanvas.width  = rect.width;
-      maskCanvas.height = rect.height;
+    function fitCanvas(){
+      maskCanvas.width = photo.width;
+      maskCanvas.height = photo.height;
       ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
-      pushHistory(); // початковий стан
-      updateCssMask();
     }
 
-    // КОЛІР/ІНТЕНСИВНІСТЬ/ТІНІ
-    function applyTint(){
-      if(!hasImage) return;
-      const c = colorPick.value;
-      const s = Number(strength.value)/100;
-      tint.style.background = c;
-      tint.style.opacity = s.toString();
-      if (keepShadows.checked){
-        shadow.style.background = c;
-        shadow.style.opacity = (s*0.35).toString();
-      } else shadow.style.opacity = "0";
-      updateCssMask();
-    }
-    colorPick.addEventListener('input', applyTint);
-    strength.addEventListener('input', ()=>{strengthVal.textContent=strength.value+"%"; applyTint();});
-    keepShadows.addEventListener('change', applyTint);
+    // малювання
+    maskCanvas.addEventListener('mousedown', e=>{drawing=true; draw(e);});
+    maskCanvas.addEventListener('mousemove', draw);
+    maskCanvas.addEventListener('mouseup', ()=>drawing=false);
+    maskCanvas.addEventListener('mouseleave', ()=>drawing=false);
 
-    // ІНСТРУМЕНТИ
-    toolRadios.forEach(r=>r.addEventListener('change', e=>{ tool = e.target.value; }));
-    brushSize.addEventListener('input', ()=>{ brushVal.textContent = brushSize.value + " px"; });
-    showMask.addEventListener('change', ()=>{ maskCanvas.style.opacity = showMask.checked ? '0.4' : '0'; });
-
-    // МАЛЮВАННЯ МАСКИ
-    const getPos = (evt)=>{
+    function draw(e){
+      if(!drawing) return;
       const rect = maskCanvas.getBoundingClientRect();
-      const e = evt.touches ? evt.touches[0] : evt;
-      return { x: (e.clientX - rect.left), y: (e.clientY - rect.top) };
-    };
-
-    const start = (e)=>{
-      if(!hasImage) return;
-      drawing=true;
-      ctx.lineJoin = ctx.lineCap = 'round';
-      ctx.lineWidth = Number(brushSize.value);
-      if (tool==='brush'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = 'white'; }
-      else { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; }
-      const p=getPos(e);
-      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+0.01,p.y+0.01); ctx.stroke();
-      updateCssMask();
-    };
-    const move = (e)=>{
-      if(!drawing || !hasImage) return;
-      const p=getPos(e);
-      ctx.lineTo(p.x,p.y);
-      ctx.stroke();
-      updateCssMask();
-    };
-    const end = ()=>{
-      if(drawing){
-        drawing=false; ctx.beginPath();
-        pushHistory(); // зберегли стан після мазка
-        redoStack=[];  // очищаємо redo після нового кроку
-        updateUndoRedoButtons();
-      }
-    };
-
-    // Події миші/тачу
-    maskCanvas.addEventListener('pointerdown', start);
-    maskCanvas.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', end);
-    maskCanvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); start(e); }, {passive:false});
-    maskCanvas.addEventListener('touchmove',  (e)=>{ e.preventDefault(); move(e);  }, {passive:false});
-    window.addEventListener('touchend', end);
-
-    // CSS-маска для кольорових шарів
-    function updateCssMask(){
-      const url = maskCanvas.toDataURL('image/png');
-      [tint, shadow].forEach(el=>{
-        el.style.maskImage = `url(${url})`;
-        el.style.webkitMaskImage = `url(${url})`;
-        el.style.maskSize = '100% 100%';
-        el.style.webkitMaskSize = '100% 100%';
-      });
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      ctx.fillStyle = tool==="brush" ? "white" : "black";
+      ctx.beginPath();
+      ctx.arc(x,y, brushSize.value/2, 0, Math.PI*2);
+      ctx.fill();
+      updateMask();
     }
 
-    // ОЧИСТИТИ МАСКУ
-    function clearMask(skipHistory=false){
-      ctx.globalCompositeOperation='source-over';
-      ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
-      if(!skipHistory) pushHistory();
-      redoStack=[];
-      updateUndoRedoButtons();
-      updateCssMask();
+    function updateMask(){
+      const maskURL = maskCanvas.toDataURL();
+      tint.style.maskImage = `url(${maskURL})`;
+      tint.style.webkitMaskImage = `url(${maskURL})`;
     }
-    clearMaskBtn.addEventListener('click', ()=>clearMask());
 
-    // ІСТОРІЯ (UNDO/REDO)
-    function pushHistory(){
-      try {
-        const snap = ctx.getImageData(0,0,maskCanvas.width,maskCanvas.height);
-        undoStack.push(snap);
-        if(undoStack.length>50) undoStack.shift(); // ліміт історії
-      } catch(e){ /* інколи може кинути помилку у старих браузерах */ }
-    }
-    function restore(imageData){
-      ctx.putImageData(imageData,0,0);
-      updateCssMask();
-    }
-    function undo(){
-      if(undoStack.length<=1) return;            // нема куди
-      const current = undoStack.pop();           // поточний -> в redo
-      redoStack.push(current);
-      const prev = undoStack[undoStack.length-1];// попередній показуємо
-      restore(prev);
-      updateUndoRedoButtons();
-    }
-    function redo(){
-      if(redoStack.length===0) return;
-      const next = redoStack.pop();
-      undoStack.push(next);
-      restore(next);
-      updateUndoRedoButtons();
-    }
-    function updateUndoRedoButtons(){
-      undoBtn.disabled = undoStack.length<=1;
-      redoBtn.disabled = redoStack.length===0;
-      undoBtn.style.opacity = undoBtn.disabled ? .6 : 1;
-      redoBtn.style.opacity = redoBtn.disabled ? .6 : 1;
-    }
-    undoBtn.addEventListener('click', undo);
-    redoBtn.addEventListener('click', redo);
+    document.querySelectorAll("input[name=tool]").forEach(r=>r.addEventListener("change", e=>{
+      tool=e.target.value;
+    }));
 
-    // КЛАВІАТУРНІ ШОТКАТИ
-    window.addEventListener('keydown', (e)=>{
-      const mod = e.ctrlKey || e.metaKey;
-      if(mod && e.key.toLowerCase()==='z' && !e.shiftKey){ e.preventDefault(); undo(); }
-      if(mod && e.key.toLowerCase()==='z' && e.shiftKey){ e.preventDefault(); redo(); }
-      if(e.key.toLowerCase()==='b'){ tool='brush'; toolRadios[0].checked=true; }
-      if(e.key.toLowerCase()==='e'){ tool='eraser'; toolRadios[1].checked=true; }
+    brushSize.addEventListener("input", ()=>{
+      brushVal.textContent = brushSize.value+" px";
     });
 
-    // ЗБЕРЕГТИ МАСКУ PNG (прозорий фон, біла маска)
-    saveMaskBtn.addEventListener('click', ()=>{
-      const link = document.createElement('a');
-      link.download = 'mask.png';
-      link.href = maskCanvas.toDataURL('image/png');
-      link.click();
+    // колір/сила
+    function applyTint(){
+      const c=colorPick.value;
+      const s=Number(strength.value)/100;
+      tint.style.background = c;
+      tint.style.opacity = s;
+    }
+    colorPick.addEventListener("input", applyTint);
+    strength.addEventListener("input", ()=>{
+      strengthVal.textContent = strength.value+"%";
+      applyTint();
     });
 
-    // СКИНУТИ НАЛАШТУВАННЯ
-    resetBtn.addEventListener('click', ()=>{
+    resetBtn.addEventListener("click", ()=>{
       if(!hasImage) return;
       colorPick.value="#ff6600";
-      strength.value="70"; strengthVal.textContent="70%";
-      keepShadows.checked=true;
-      showMask.checked=false; maskCanvas.style.opacity='0';
-      clearMask();
-      tint.style.opacity="0"; shadow.style.opacity="0";
+      strength.value=70; strengthVal.textContent="70%";
+      tint.style.opacity=0;
+      ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
+      updateMask();
+    });
+    clearBtn.addEventListener("click", ()=>{
+      ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
+      updateMask();
     });
 
-    // Реакція на ресайз
-    window.addEventListener('resize', ()=>{ if(hasImage) fitCanvasToViewer(); });
+    // refine mask
+    async function refineMaskOnServer(){
+      if(!hasImage){ alert("Завантаж фото спочатку."); return; }
 
-    // Стартове оновлення
-    fitCanvasToViewer();
-    updateUndoRedoButtons();
+      const photoBlob = await (await fetch(photo.src)).blob();
+      const maskBlob = await (await fetch(maskCanvas.toDataURL())).blob();
+      const fd = new FormData();
+      fd.append("image", photoBlob, "image.png");
+      fd.append("mask", maskBlob, "mask.png");
+
+      refineBtn.disabled = true; refineBtn.textContent="Працюю...";
+      try{
+        const res = await fetch(API_URL+"/refine",{method:"POST",body:fd});
+        const data = await res.json();
+        const img = new Image();
+        img.onload=()=>{
+          ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
+          ctx.drawImage(img,0,0,maskCanvas.width,maskCanvas.height);
+          updateMask();
+          refineBtn.disabled=false; refineBtn.textContent="Уточнити маску (Auto)";
+        };
+        img.src="data:image/png;base64,"+data.mask_png_base64;
+      }catch(e){
+        console.error(e);
+        alert("Помилка звернення до API");
+        refineBtn.disabled=false; refineBtn.textContent="Уточнити маску (Auto)";
+      }
+    }
+    refineBtn.addEventListener("click", refineMaskOnServer);
+
   </script>
 </body>
 </html>
