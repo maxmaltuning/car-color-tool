@@ -10,19 +10,19 @@
       color: #fff;
       font-family: Arial, sans-serif;
       text-align: center;
-      padding: 50px;
+      padding: 40px;
     }
-    .upload-btn {
+    .btn {
       background-color: #ff6600;
       color: white;
       border: none;
-      padding: 15px 30px;
-      font-size: 18px;
+      padding: 12px 25px;
+      font-size: 16px;
       border-radius: 8px;
       cursor: pointer;
-      margin-bottom: 20px;
+      margin: 10px;
     }
-    .upload-btn:hover {
+    .btn:hover {
       background-color: #e65c00;
     }
     img {
@@ -35,21 +35,52 @@
 </head>
 <body>
   <h1>Car Color Tool</h1>
-  <input type="file" id="fileInput" class="upload-btn" accept="image/*" />
+
+  <!-- Завантаження фото -->
+  <input type="file" id="fileInput" class="btn" accept="image/*" />
+  <br>
+
+  <!-- Кнопки фільтрів -->
+  <button id="bwBtn" class="btn">Чорно-білий</button>
+  <button id="resetBtn" class="btn">Повернути кольори</button>
+
+  <!-- Превʼю -->
   <div id="preview"></div>
 
   <script>
     const fileInput = document.getElementById('fileInput');
     const preview = document.getElementById('preview');
+    const bwBtn = document.getElementById('bwBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    let currentImage = null;
 
     fileInput.addEventListener('change', () => {
       const file = fileInput.files[0];
       if (file) {
         const reader = new FileReader();
         reader.onload = function(e) {
-          preview.innerHTML = `<img src="${e.target.result}" alt="Uploaded Image" />`;
+          currentImage = document.createElement("img");
+          currentImage.src = e.target.result;
+          currentImage.style.filter = "none"; // без ефекту
+          preview.innerHTML = "";
+          preview.appendChild(currentImage);
         }
         reader.readAsDataURL(file);
+      }
+    });
+
+    // Чорно-білий фільтр
+    bwBtn.addEventListener('click', () => {
+      if (currentImage) {
+        currentImage.style.filter = "grayscale(100%)";
+      }
+    });
+
+    // Повернути кольори
+    resetBtn.addEventListener('click', () => {
+      if (currentImage) {
+        currentImage.style.filter = "none";
       }
     });
   </script>
