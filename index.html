@@ -302,10 +302,11 @@
       fd.append("image", photoBlob, "image.png");
       fd.append("mask",  maskBlob,  "mask.png");
       // (опційно) параметри: add_mirror, segments, thresh…
-fd.append("segments", 2000);   // точніше
-fd.append("thresh", 0.8);      // суворіше
-fd.append("band_margin", 0.22);// ширша смуга навколо вибраного
+fd.append("segments", 2500);   // точніше
+fd.append("thresh", 0.85);      // суворіше
+fd.append("band_margin", 0.18);// ширша смуга навколо вибраного
 fd.append("add_mirror", 1);    // ловимо пару (ліве/праве сидіння)
+      fd.append("keep_k", 4);   // лишаємо 4 найближчі підходящі деталі
       smartBtn.disabled = true; smartBtn.textContent = "Шукаю схожі...";
       try{
         const res = await fetch(API_URL + "/grow_similar", { method:"POST", body: fd });
