@@ -192,28 +192,64 @@
   clearBtn.addEventListener('click', ()=>{ mctx.clearRect(0,0,mask.width,mask.height); drawPreview(); });
   showMask.addEventListener('change', drawPreview);
 
-  // Magic Fill (OpenCV floodFill)
-  async function magicFillAt(x,y,tolerance=14){
-    await window.cvReady;
-    const w=photo.width,h=photo.height;
-    const src=cv.imread(photo); cv.cvtColor(src,src,cv.COLOR_RGBA2RGB);
-    const ffMask=new cv.Mat.zeros(h+2,w+2,cv.CV_8UC1);
-    const lo=new cv.Scalar(tolerance,tolerance,tolerance,0);
-    const hi=new cv.Scalar(tolerance,tolerance,tolerance,0);
-    const dst=new cv.Mat(); src.copyTo(dst);
-    cv.floodFill(dst,ffMask,new cv.Point(x,y),new cv.Scalar(255,255,255,255),new cv.Rect(),lo,hi,(4|(255<<8)));
-    const region=new cv.Mat(h,w,cv.CV_8UC1);
-    for(let r=0;r<h;r++) for(let c=0;c<w;c++) region.ucharPtr(r,c)[0]=ffMask.ucharPtr(r+1,c+1)[0]?255:0;
-    const kernel=cv.Mat.ones(3,3,cv.CV_8U); cv.erode(region,region,kernel);
-    const mImg=mctx.getImageData(0,0,w,h);
-    for(let i=0,j=0;j<region.data.length;i+=4,j++){
-      const add=region.data[j], a=mImg.data[i+3];
-      mImg.data[i]=255; mImg.data[i+1]=255; mImg.data[i+2]=255; mImg.data[i+3]=Math.max(a,add);
+  // ==== Magic Fill (Lab + ΔE) ====
+async function magicFillAt(x, y, tolerance = 22) {
+  await window.cvReady;
+  const w = photo.width, h = photo.height;
+
+  // 1) зчитуємо фото й у Lab
+  let src = cv.imread(photo);                       // RGBA
+  cv.cvtColor(src, src, cv.COLOR_RGBA2RGB);         // RGB
+  let lab = new cv.Mat();
+  cv.cvtColor(src, lab, cv.COLOR_RGB2Lab);          // Lab
+
+  // 2) середній колір 5x5 навколо кліку (у Lab)
+  const r0 = Math.max(0, y - 2), r1 = Math.min(h - 1, y + 2);
+  const c0 = Math.max(0, x - 2), c1 = Math.min(w - 1, x + 2);
+  let Lm = 0, am = 0, bm = 0, n = 0;
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      const p = lab.ucharPtr(r, c);
+      Lm += p[0]; am += p[1]; bm += p[2]; n++;
     }
-    mctx.putImageData(mImg,0,0);
-    src.delete(); dst.delete(); ffMask.delete(); region.delete(); kernel.delete();
+  }
+  Lm /= n; am /= n; bm /= n;
+
+  // 3) поріг ΔE (мапимо повзунок 5..40 → десь 8..35)
+  const deltaE = Math.max(6, Math.min(40, tolerance * 1.2));
+
+  // 4) рахуємо маску за ΔE
+  let maskLab = new cv.Mat.zeros(h, w, cv.CV_8UC1);
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      const p = lab.ucharPtr(r, c);
+      const dL = p[0] - Lm, da = p[1] - am, db = p[2] - bm;
+      const dE = Math.sqrt(dL*dL + da*da + db*db);
+      maskLab.ucharPtr(r, c)[0] = dE <= deltaE ? 255 : 0;
+    }
   }
 
+  // 5) трохи прибираємо шум/дірки
+  const k = cv.Mat.ones(3,3,cv.CV_8U);
+  cv.morphologyEx(maskLab, maskLab, cv.MORPH_OPEN, k);
+  cv.morphologyEx(maskLab, maskLab, cv.MORPH_CLOSE, k);
+
+  // 6) додаємо у твою маску (альфа-канал білого)
+  const mImg = mctx.getImageData(0, 0, w, h);
+  for (let i = 0, j = 0; j < w*h; i += 4, j++) {
+    const add = maskLab.data[j];
+    if (add) {
+      mImg.data[i]   = 255;
+      mImg.data[i+1] = 255;
+      mImg.data[i+2] = 255;
+      mImg.data[i+3] = 255; // повністю активуємо
+    }
+  }
+  mctx.putImageData(mImg, 0, 0);
+
+  // прибирання
+  src.delete(); lab.delete(); maskLab.delete(); k.delete();
+}
   // GrabCut refine
   async function refineMaskClient(){
     await window.cvReady;
