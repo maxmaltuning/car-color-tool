@@ -20,12 +20,12 @@
     .btn:hover{border-color:#3a465a}.btn.accent{background:var(--accent);border-color:#67b0ff;color:#081321}
     .btn.ghost{background:transparent;border:1px dashed #3a465a;color:#bcd2ff}
     .frame{position:relative;flex:1;margin-top:12px;background:#0a0d12;border:1px solid #222833;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center}
-    /* Канваси лежать один НАД одним і з фіксованим порядком */
+    /* Стек канвасів */
     .stack{position:relative;width:100%;height:100%}
     .stack canvas{position:absolute;inset:0;max-width:100%;max-height:100%;image-rendering:auto}
     #photo{z-index:1}
-    #render{z-index:2; pointer-events:none;}  /* накладка (колір/патерн), кліки не перехоплює */
-    #mask{z-index:3; }                        /* для пензлика/кліків */
+    #render{z-index:2; pointer-events:none;}  /* тільки накладка */
+    #mask{z-index:3; opacity:0; }              /* приймає кліки, але НЕ видно білий малюнок */
     .note{font-size:12px;color:#94a3b8;margin-top:6px}
     .row{display:flex;gap:8px;align-items:center;margin:8px 0}
     select,input[type="color"],input[type="range"]{background:#0f1320;color:#e6e6e6;border:1px solid #2a3240;border-radius:8px;padding:6px 8px}
@@ -79,7 +79,7 @@
         <canvas id="mask"></canvas>
       </div>
     </div>
-    <div class="note">1) Завантаж фото. 2) “Клік (Magic)” по деталі — зʼявиться маска (синя). 3) Пензлик/Гумка підправ. 4) “Уточнити маску (Auto)”. 5) Праворуч вибери колір/матеріал і натисни “Застосувати”.</div>
+    <div class="note">1) Завантаж фото. 2) “Клік (Magic)” по деталі → зʼявиться маска. 3) Пензлик/Гумка підправ. 4) “Уточнити маску”. 5) Праворуч міняй колір/матеріал — прев’ю живе.</div>
   </div>
 
   <div class="right">
@@ -125,6 +125,7 @@
   const refineBtn = document.getElementById('refine');
   const clearBtn = document.getElementById('clear');
   const showMask = document.getElementById('showMask');
+
   const color = document.getElementById('color');
   const intensity = document.getElementById('intensity');
   const gloss = document.getElementById('gloss');
@@ -152,7 +153,7 @@
       const ms=1400, m=Math.max(w,h);
       if(m>ms){ const s=ms/m; w=Math.round(w*s); h=Math.round(h*s); }
       resizeCanvases(w,h);
-      pctx.drawImage(img,0,0,w,h);   // ФОТО малюється тільки тут!
+      pctx.drawImage(img,0,0,w,h);   // ФОТО малюється тільки тут
       hasImage=true;
       drawPreview();
     };
@@ -167,18 +168,18 @@
     return { x:Math.round((evt.clientX-rect.left)*sx), y:Math.round((evt.clientY-rect.top)*sy) };
   }
 
-  // Пензлик/клік
+  // Малювання маски (білий на невидимому канвасі)
   mask.addEventListener('pointerdown', e=>{
     if(!hasImage) return;
     const pos=getPos(e, mask);
     if(curTool==='magic'){ magicFillAt(pos.x,pos.y,parseInt(tol.value,10)).then(drawPreview); return; }
-    drawing=true; drawDot(pos.x,pos.y);
+    drawing=true; drawDot(pos.x,pos.y); drawPreview();
   });
   mask.addEventListener('pointermove', e=>{
     if(!drawing||!hasImage) return;
-    const pos=getPos(e, mask); drawDot(pos.x,pos.y);
+    const pos=getPos(e, mask); drawDot(pos.x,pos.y); drawPreview();
   });
-  ['pointerup','pointerleave','pointercancel'].forEach(ev=> mask.addEventListener(ev, ()=>{ drawing=false; drawPreview(); }));
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=> mask.addEventListener(ev, ()=>{ drawing=false; }));
 
   function drawDot(x,y){
     const b=parseInt(brush.value,10);
@@ -229,8 +230,9 @@
     for(let i=0,j=0;j<w*h;i+=4,j++){ out.data[i]=255; out.data[i+1]=255; out.data[i+2]=255; out.data[i+3]=result.data[j]; }
     mctx.putImageData(out,0,0);
     src.delete(); gcMask.delete(); bg.delete(); fg.delete(); result.delete();
+    drawPreview();
   }
-  refineBtn.addEventListener('click', ()=>{ if(hasImage) refineMaskClient().then(drawPreview); });
+  document.getElementById('refine').addEventListener('click', ()=>{ if(hasImage) refineMaskClient(); });
 
   // Накладка (тільки в межах маски)
   function hexToRgb(hex){ const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -258,16 +260,16 @@
   function drawPreview(){
     if(!hasImage){ rctx.clearRect(0,0,render.width,render.height); return; }
     const w=render.width,h=render.height;
-    rctx.clearRect(0,0,w,h); // ВАЖЛИВО: НЕ малюємо фото тут, фото вже є на #photo
+    rctx.clearRect(0,0,w,h); // ФОТО НЕ малюємо тут — воно вже на #photo
 
-    const base=pctx.getImageData(0,0,w,h);   // оригінальне фото (для зчитування)
-    const mimg=mctx.getImageData(0,0,w,h);   // поточна маска (альфа)
-    const overlay=rctx.createImageData(w,h); // це прозора НАКЛАДКА
+    const base=pctx.getImageData(0,0,w,h);   // оригінал
+    const mimg=mctx.getImageData(0,0,w,h);   // альфа маски
+    const overlay=rctx.createImageData(w,h); // прозора накладка
 
     const col=hexToRgb(color.value);
     const k=Math.max(0,Math.min(1,intensity.value/100));
 
-    // 1) колір тільки там, де маска
+    // кольорова накладка лише всередині маски
     for(let i=0;i<overlay.data.length;i+=4){
       const a=mimg.data[i+3];
       if(a>0){
@@ -275,14 +277,13 @@
         overlay.data[i]   = Math.round((1-k)*r0 + k*col.r);
         overlay.data[i+1] = Math.round((1-k)*g0 + k*col.g);
         overlay.data[i+2] = Math.round((1-k)*b0 + k*col.b);
-        overlay.data[i+3] = 255;                 // видимо тільки в масці
+        overlay.data[i+3] = 255;
       }else{
-        overlay.data[i+3] = 0;                   // поза маскою — повністю прозоро
+        overlay.data[i+3] = 0;
       }
     }
     rctx.putImageData(overlay,0,0);
 
-    // 2) глянець (легкий) лише поверх накладки
     const glossK=Math.max(0,Math.min(1,gloss.value/100));
     if(glossK>0){
       rctx.globalCompositeOperation="overlay";
@@ -291,11 +292,9 @@
       rctx.globalCompositeOperation="source-over";
     }
 
-    // 3) патерн тільки в межах маски — малюємо в буфер і накладаємо
     if(pattern.value!=='none'){
       const pat=makePatternCanvas(w,h,pattern.value,pstrength.value);
-      const pctx2=pat.getContext('2d');
-      const pimg=pctx2.getImageData(0,0,w,h);
+      const pimg=pat.getContext('2d').getImageData(0,0,w,h);
       const out=rctx.getImageData(0,0,w,h);
       for(let i=0;i<out.data.length;i+=4){
         if(mimg.data[i+3]>0){
@@ -308,20 +307,27 @@
       rctx.putImageData(out,0,0);
     }
 
-    // 4) синя підсвітка маски (за бажанням)
+    // напівпрозора синя ПІДСВІТКА маски (тільки якщо увімкнено)
     if(showMask.checked){
       const blue=rctx.createImageData(w,h);
       for(let i=0;i<blue.data.length;i+=4){
         blue.data[i]=30; blue.data[i+1]=80; blue.data[i+2]=255;
-        blue.data[i+3]=Math.round(mimg.data[i+3]*0.35);
+        blue.data[i+3]=Math.round(mimg.data[i+3]*0.35); // 35% прозорість
       }
       rctx.putImageData(blue,0,0);
     }
   }
 
+  // Живе прев’ю без кнопки «Застосувати»
+  [color,intensity,gloss,pattern,pstrength].forEach(el=>{
+    el.addEventListener('input', drawPreview);
+    el.addEventListener('change', drawPreview);
+  });
   document.getElementById('apply').addEventListener('click', drawPreview);
-  document.getElementById('save').addEventListener('click', ()=>{ saved.style.display='inline'; setTimeout(()=>saved.style.display='none',1800); });
-  document.getElementById('refine').addEventListener('click', ()=>{ if(hasImage) refineMaskClient().then(drawPreview); });
+
+  document.getElementById('save').addEventListener('click', ()=>{
+    saved.style.display='inline'; setTimeout(()=>saved.style.display='none',1800);
+  });
 
   (function init(){ resizeCanvases(1200,720); })();
 </script>
