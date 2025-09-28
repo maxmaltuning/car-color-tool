@@ -5,83 +5,138 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Car Color Tool</title>
   <style>
+    :root { --accent:#ff6600; }
+    * { box-sizing: border-box; }
     body {
-      background-color: #0d0d0d;
-      color: #fff;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 40px;
+      margin:0; background:#0d0d0d; color:#fff; font-family: Arial, sans-serif;
     }
-    .btn {
-      background-color: #ff6600;
-      color: white;
-      border: none;
-      padding: 12px 25px;
-      font-size: 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      margin: 10px;
+    .wrap {
+      max-width: 960px; margin: 0 auto; padding: 20px;
     }
-    .btn:hover {
-      background-color: #e65c00;
+    h1 { margin:10px 0 20px; font-size: 22px; font-weight:700; }
+    .controls {
+      display:flex; flex-wrap: wrap; gap:10px; align-items:center; margin-bottom:12px;
     }
-    img {
-      max-width: 90%;
-      margin-top: 20px;
-      border: 2px solid #ff6600;
-      border-radius: 10px;
+    .btn, input[type="file"]::file-selector-button {
+      background: var(--accent); color:#fff; border:none; padding:10px 16px;
+      border-radius:8px; font-size:14px; cursor:pointer;
     }
+    .btn:hover, input[type="file"]::file-selector-button:hover { filter: brightness(0.95); }
+    .card {
+      background:#131313; border:1px solid #242424; border-radius:12px; padding:14px;
+    }
+    .viewer {
+      position: relative; width: 100%;
+      aspect-ratio: 16/9; /* автоматичне полотно */
+      background:#000; border-radius:10px; overflow:hidden; border:2px solid var(--accent);
+    }
+    .viewer img, .viewer .tint, .viewer .shadow {
+      position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+    }
+    .tint { mix-blend-mode: color; opacity: 0; pointer-events:none; }
+    .shadow { mix-blend-mode: multiply; opacity: 0; pointer-events:none; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .label { font-size:13px; opacity:.9; }
+    input[type="color"] { width:44px; height:36px; padding:0; border:none; background:transparent; }
+    input[type="range"] { width: 160px; }
+    .hint { font-size:12px; opacity:.7; margin-top:8px; }
   </style>
 </head>
 <body>
-  <h1>Car Color Tool</h1>
+  <div class="wrap">
+    <h1>Car Color Tool</h1>
 
-  <!-- Завантаження фото -->
-  <input type="file" id="fileInput" class="btn" accept="image/*" />
-  <br>
+    <div class="controls card">
+      <div class="row">
+        <input type="file" id="fileInput" accept="image/*" />
+        <button id="resetBtn" class="btn">Скинути</button>
+      </div>
 
-  <!-- Кнопки фільтрів -->
-  <button id="bwBtn" class="btn">Чорно-білий</button>
-  <button id="resetBtn" class="btn">Повернути кольори</button>
+      <hr style="border-color:#222; margin:12px 0;">
 
-  <!-- Превʼю -->
-  <div id="preview"></div>
+      <div class="row">
+        <span class="label">Колір:</span>
+        <input type="color" id="colorPick" value="#ff6600" />
+        <span class="label">Інтенсивність:</span>
+        <input type="range" id="strength" min="0" max="100" value="70" />
+        <span class="label" id="strengthVal">70%</span>
+        <label class="row" style="gap:6px;margin-left:12px;">
+          <input type="checkbox" id="keepShadows" checked />
+          <span class="label">Зберегти тіні (реалістичніше)</span>
+        </label>
+      </div>
+      <div class="hint">Поки що фарбується все фото. На наступному кроці додамо виділення частин (сидіння, двері тощо).</div>
+    </div>
+
+    <div class="viewer" id="viewer">
+      <img id="photo" alt="Фото" />
+      <div class="tint" id="tint"></div>
+      <div class="shadow" id="shadow"></div>
+    </div>
+  </div>
 
   <script>
     const fileInput = document.getElementById('fileInput');
-    const preview = document.getElementById('preview');
-    const bwBtn = document.getElementById('bwBtn');
-    const resetBtn = document.getElementById('resetBtn');
+    const resetBtn  = document.getElementById('resetBtn');
+    const colorPick = document.getElementById('colorPick');
+    const strength  = document.getElementById('strength');
+    const strengthVal = document.getElementById('strengthVal');
+    const keepShadows = document.getElementById('keepShadows');
 
-    let currentImage = null;
+    const photo = document.getElementById('photo');
+    const tint  = document.getElementById('tint');
+    const shadow= document.getElementById('shadow');
+    const viewer= document.getElementById('viewer');
 
+    let hasImage = false;
+
+    // Завантаження фото
     fileInput.addEventListener('change', () => {
-      const file = fileInput.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          currentImage = document.createElement("img");
-          currentImage.src = e.target.result;
-          currentImage.style.filter = "none"; // без ефекту
-          preview.innerHTML = "";
-          preview.appendChild(currentImage);
-        }
-        reader.readAsDataURL(file);
-      }
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        photo.src = e.target.result;
+        hasImage = true;
+        applyTint(); // одразу застосувати поточні налаштування
+      };
+      reader.readAsDataURL(file);
     });
 
-    // Чорно-білий фільтр
-    bwBtn.addEventListener('click', () => {
-      if (currentImage) {
-        currentImage.style.filter = "grayscale(100%)";
-      }
-    });
+    // Застосувати колір/силу/тіні
+    function applyTint() {
+      if (!hasImage) return;
+      const c = colorPick.value;
+      const s = Number(strength.value) / 100;
 
-    // Повернути кольори
+      // кольоровий шар
+      tint.style.background = c;
+      tint.style.opacity = s.toString();
+
+      // шар тіней (multiply), щоб зберегти глибину
+      if (keepShadows.checked) {
+        shadow.style.background = c;
+        shadow.style.opacity = (s * 0.35).toString(); // легка домішка для глибини
+      } else {
+        shadow.style.opacity = "0";
+      }
+    }
+
+    colorPick.addEventListener('input', applyTint);
+    strength.addEventListener('input', () => {
+      strengthVal.textContent = strength.value + "%";
+      applyTint();
+    });
+    keepShadows.addEventListener('change', applyTint);
+
     resetBtn.addEventListener('click', () => {
-      if (currentImage) {
-        currentImage.style.filter = "none";
-      }
+      if (!hasImage) return;
+      colorPick.value = "#ff6600";
+      strength.value = "70";
+      strengthVal.textContent = "70%";
+      keepShadows.checked = true;
+      tint.style.opacity = "0";
+      shadow.style.opacity = "0";
     });
   </script>
 </body>
