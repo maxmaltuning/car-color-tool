@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Car Color Tool</title>
+  <style>
+    body {
+      background-color: #0d0d0d;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 50px;
+    }
+    .upload-btn {
+      background-color: #ff6600;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      font-size: 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+    .upload-btn:hover {
+      background-color: #e65c00;
+    }
+    img {
+      max-width: 90%;
+      margin-top: 20px;
+      border: 2px solid #ff6600;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Car Color Tool</h1>
+  <input type="file" id="fileInput" class="upload-btn" accept="image/*" />
+  <div id="preview"></div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const preview = document.getElementById('preview');
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          preview.innerHTML = `<img src="${e.target.result}" alt="Uploaded Image" />`;
+        }
+        reader.readAsDataURL(file);
+      }
+    });
+  </script>
+</body>
+</html>
