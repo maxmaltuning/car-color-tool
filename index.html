@@ -36,8 +36,7 @@
 
   .sec-title{font-size:12px;color:#f4b183;text-transform:uppercase;letter-spacing:.12em;margin:14px 0 8px}
   .row{display:flex;gap:8px;align-items:center;margin:8px 0}
-  select,input[type="color"],input[type="range"]{background:#0e1014;color:#f2f2f2;border:1px solid var(--stroke);border-radius:9px;padding:6px 8px}
-  input[type="range"]{width:100%}
+  select,input[type="color"]{background:#0e1014;color:#f2f2f2;border:1px solid var(--stroke);border-radius:9px;padding:6px 8px}
   .small{font-size:12px;color:var(--sub)}
   .tooltog label{display:inline-flex;gap:6px;align-items:center;margin-right:8px;font-size:12px;color:#e9edf6}
 
@@ -53,7 +52,7 @@
 
   .ok{color:#7cf29a;font-weight:700;display:none}
 
-  /* Модалка для строчок */
+  /* Модалка: Строчки */
   .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
   .modal{width:min(92vw,560px);background:#0f1115;border:1px solid var(--stroke);border-radius:14px;padding:14px}
   .modal header{display:flex;justify-content:space-between;align-items:center;border:none;padding:0 0 10px 0}
@@ -61,6 +60,15 @@
   .chips{display:flex;gap:8px;flex-wrap:wrap}
   .chip{padding:6px 10px;border-radius:999px;border:1px solid var(--stroke);background:#15171c;cursor:pointer}
   .chip.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,122,0,.15) inset}
+
+  /* Модалка: Авто */
+  .auto-back{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:60}
+  .auto{width:min(92vw,560px);background:#0f1115;border:1px solid var(--stroke);border-radius:14px;padding:14px}
+  .auto header{display:flex;justify-content:space-between;align-items:center;border:none;padding:0 0 10px 0}
+  .auto h3{margin:0;font-size:16px}
+  .field{display:flex;gap:8px;align-items:center;margin:8px 0}
+  .field input{flex:1;background:#0e1014;color:#f2f2f2;border:1px solid var(--stroke);border-radius:9px;padding:8px}
+  .tip{font-size:12px;color:var(--sub)}
 </style>
 
 <!-- OpenCV -->
@@ -82,6 +90,9 @@
     <div class="toolbar">
       <div class="group"><label>Фото:</label><input id="file" type="file" accept="image/*"></div>
       <div class="group"><label>Авто:</label><select id="model"><option>G-Wagen</option></select></div>
+
+      <button id="autoBtn" class="btn">Авто-розпізнавання</button>
+
       <div class="group tooltog">
         <label><input type="radio" name="tool" value="magic" checked> Клік (Magic)</label>
         <label><input type="radio" name="tool" value="pen"> Пензлик</label>
@@ -89,7 +100,7 @@
       </div>
       <div class="group"><label class="small">Кисть</label><input id="brush" type="range" min="6" max="80" value="30"></div>
       <div class="group"><label class="small">Толерантність</label><input id="tol" type="range" min="5" max="40" value="22"></div>
-      <button id="refine" class="btn secondary">Уточнити маску (Auto)</button>
+      <button id="refine" class="btn secondary">Уточнити маску</button>
       <button id="clear" class="btn ghost">Очистити</button>
       <div class="group"><label class="small"><input id="showMask" type="checkbox" checked> Показати маску</label></div>
     </div>
@@ -101,7 +112,7 @@
         <canvas id="mask"></canvas>
       </div>
     </div>
-    <div class="note">1) Завантаж фото дверної карти. 2) Клік (Magic) по елементу або Пензлик/Гумка. 3) Уточнити маску. 4) Справа — обери колір/матеріал, увімкни перфорацію або відкрий “Строчки”.</div>
+    <div class="note">Зараз можна: вручну (Magic/Пензлик) або натиснути <b>Авто-розпізнавання</b> — зʼявляться контури елементів; клік по контуру підставить маску.</div>
   </div>
 
   <div class="right">
@@ -159,7 +170,32 @@
     <div class="row" style="margin-top:14px">
       <button id="genStitches" class="btn">Згенерувати (демо)</button>
     </div>
-    <div class="note">Це демо без AI. У продакшені тут буде генерація строчок від моделі (тільки в межах маски).</div>
+    <div class="note">У продакшені тут буде генерація строчок від AI (тільки в межах маски).</div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: АВТО -->
+<div class="auto-back" id="autoBack">
+  <div class="auto">
+    <header>
+      <h3>Авто-розпізнавання</h3>
+      <button id="closeAuto" class="btn secondary">Закрити</button>
+    </header>
+
+    <div class="sec-title">Марка та модель</div>
+    <div class="field">
+      <label class="small">Марка</label>
+      <input id="makeInput" value="Mercedes-Benz"/>
+    </div>
+    <div class="field">
+      <label class="small">Модель</label>
+      <input id="modelInput" value="G-Class (W463)"/>
+    </div>
+    <div class="tip">Це демо-визначення. У майбутній версії тут буде AI, який впізнає авто з фото і підтягне правильну модель.</div>
+
+    <div class="row" style="margin-top:12px">
+      <button id="runAuto" class="btn">Запустити розпізнавання елементів</button>
+    </div>
   </div>
 </div>
 
@@ -181,6 +217,13 @@
   const clearBtn = document.getElementById('clear');
   const showMask = document.getElementById('showMask');
 
+  const autoBtn = document.getElementById('autoBtn');
+  const autoBack = document.getElementById('autoBack');
+  const closeAuto = document.getElementById('closeAuto');
+  const makeInput = document.getElementById('makeInput');
+  const modelInput = document.getElementById('modelInput');
+  const runAuto = document.getElementById('runAuto');
+
   const color = document.getElementById('color');
   const material = document.getElementById('material');
   const perforated = document.getElementById('perforated');
@@ -198,11 +241,13 @@
 
   // ===== Стан =====
   let hasImage=false, drawing=false, curTool='magic';
-  let overlayStitches = null; // канвас зі строчками (накладається в drawPreview)
+  let overlayStitches = null; // канвас зі строчками
+  let autoRegions = [];       // масив {maskCanvas, contourPath} для автосегментації
 
   function resizeCanvases(w,h){
     [photo, render, mask].forEach(c=>{ c.width=w; c.height=h; });
     mctx.clearRect(0,0,w,h); rctx.clearRect(0,0,w,h);
+    autoRegions = [];
   }
 
   // ===== Завантаж фото =====
@@ -235,6 +280,13 @@
   mask.addEventListener('pointerdown', e=>{
     if(!hasImage) return;
     const pos=getPos(e, mask);
+
+    // Якщо є автосегментація — клік по контурі/ділянці = підставити ту маску
+    if(autoRegions.length){
+      const pick = pickAutoRegionAt(pos.x, pos.y);
+      if(pick){ applyRegionToMask(pick.maskCanvas); drawPreview(); return; }
+    }
+
     if(curTool==='magic'){ magicFillAt(pos.x,pos.y,parseInt(tol.value,10)).then(drawPreview); return; }
     drawing=true; drawDot(pos.x,pos.y); drawPreview();
   });
@@ -310,7 +362,7 @@
     src.delete(); gcMask.delete(); bg.delete(); fg.delete(); result.delete();
     drawPreview();
   }
-  refineBtn.addEventListener('click', ()=>{ if(hasImage) refineMaskClient(); });
+  document.getElementById('refine').addEventListener('click', ()=>{ if(hasImage) refineMaskClient(); });
 
   // ===== Палетка 20 кольорів =====
   const PALETTE = [
@@ -330,7 +382,6 @@
       });
       swatchesBox.appendChild(d);
     });
-    // за замовчуванням обрати помаранчевий
     const idx = PALETTE.indexOf("#ff7a00");
     if(idx>=0) swatchesBox.children[idx].classList.add('selected');
   }
@@ -340,29 +391,20 @@
   function makeMaterialTexture(w,h, type){
     const c=document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d');
     if(type==='leather'){
-      // зерниста шкіра (шум)
       const img=ctx.createImageData(w,h);
-      for(let i=0;i<img.data.length;i+=4){
-        const n = 128 + ((Math.random()*50)|0); // сірий шум
-        img.data[i]=n; img.data[i+1]=n; img.data[i+2]=n; img.data[i+3]=28;
-      }
+      for(let i=0;i<img.data.length;i+=4){ const n = 128 + ((Math.random()*50)|0);
+        img.data[i]=n; img.data[i+1]=n; img.data[i+2]=n; img.data[i+3]=28; }
       ctx.putImageData(img,0,0);
     }else if(type==='alcantara'){
       const img=ctx.createImageData(w,h);
-      for(let i=0;i<img.data.length;i+=4){
-        const n = 120 + ((Math.random()*25)|0);
-        img.data[i]=n; img.data[i+1]=n; img.data[i+2]=n; img.data[i+3]=35;
-      }
+      for(let i=0;i<img.data.length;i+=4){ const n = 120 + ((Math.random()*25)|0);
+        img.data[i]=n; img.data[i+1]=n; img.data[i+2]=n; img.data[i+3]=35; }
       ctx.putImageData(img,0,0);
     }else if(type==='carbon'){
-      // діагональне плетіння
-      ctx.fillStyle="rgba(255,255,255,18)"; // легкий акцент
-      for(let i=-h;i<w+h;i+=14){
-        ctx.fillRect(i,0,7,h);
-      }
+      ctx.fillStyle="rgba(255,255,255,0.18)";
+      for(let i=-h;i<w+h;i+=14){ ctx.fillRect(i,0,7,h); }
       ctx.globalCompositeOperation="multiply";
-      ctx.fillStyle="rgba(0,0,0,0.85)";
-      ctx.fillRect(0,0,w,h);
+      ctx.fillStyle="rgba(0,0,0,0.85)"; ctx.fillRect(0,0,w,h);
       ctx.globalCompositeOperation="source-over";
     }
     return c;
@@ -378,7 +420,7 @@
     return c;
   }
 
-  // ===== Строчки (модалка, демо) =====
+  // ===== Строчки (модалка) =====
   function makeStitches(w,h, style){
     const c=document.createElement('canvas'); c.width=w;c.height=h; const ctx=c.getContext('2d');
     if(style==='diamonds'){
@@ -416,7 +458,7 @@
     return c;
   }
 
-  // Модалка керування
+  // Модалки
   stitchesBtn.addEventListener('click', ()=>{ modalBack.style.display='flex'; });
   closeModal.addEventListener('click', ()=>{ modalBack.style.display='none'; });
   stitchStyles.addEventListener('click', (e)=>{
@@ -432,9 +474,194 @@
     drawPreview();
   });
 
+  autoBtn.addEventListener('click', ()=>{ if(!hasImage) return; autoBack.style.display='flex'; });
+  closeAuto.addEventListener('click', ()=>{ autoBack.style.display='none'; });
+
+  runAuto.addEventListener('click', async ()=>{
+    if(!hasImage) return;
+    autoBack.style.display='none';
+    await runAutoSegmentation(); // запустити автосегментацію
+    drawPreview();
+  });
+
+  // ====== АВТОСЕГМЕНТАЦІЯ (демо на k-means + контури) ======
+  async function runAutoSegmentation(){
+    await window.cvReady;
+    const W = photo.width, H = photo.height;
+
+    // 1) Зменшуємо фото для швидкості
+    const targetW = 320;
+    const scale = targetW / W;
+    const targetH = Math.max(1, Math.round(H * scale));
+
+    let srcFull = cv.imread(photo); cv.cvtColor(srcFull, srcFull, cv.COLOR_RGBA2RGB);
+    let src = new cv.Mat(); cv.resize(srcFull, src, new cv.Size(targetW, targetH), 0, 0, cv.INTER_AREA);
+
+    // 2) у Lab
+    let lab = new cv.Mat(); cv.cvtColor(src, lab, cv.COLOR_RGB2Lab);
+
+    // 3) k-means по кольору (K=5)
+    const samples = lab.reshape(1, targetW*targetH); // Nx3
+    samples.convertTo(samples, cv.CV_32F);
+    const K = 5;
+    const criteria = new cv.TermCriteria(cv.TermCriteria_EPS + cv.TermCriteria_MAX_ITER, 10, 1.0);
+    const labels = new cv.Mat();
+    const centers = new cv.Mat();
+    cv.kmeans(samples, K, labels, criteria, 2, cv.KMEANS_PP_CENTERS, centers);
+
+    // 4) Будуємо маску для кожного кластера, масштабуємо назад до оригіналу і чистимо
+    autoRegions = [];
+    for(let k=0; k<K; k++){
+      let maskSmall = new cv.Mat.zeros(targetH, targetW, cv.CV_8UC1);
+      for(let i=0;i<labels.rows;i++){
+        if(labels.intAt(i,0) === k){
+          const r = Math.floor(i/targetW);
+          const c = i % targetW;
+          maskSmall.ucharPtr(r,c)[0] = 255;
+        }
+      }
+      // морфологія
+      const k3 = cv.Mat.ones(3,3,cv.CV_8U);
+      cv.morphologyEx(maskSmall, maskSmall, cv.MORPH_OPEN, k3);
+      cv.morphologyEx(maskSmall, maskSmall, cv.MORPH_CLOSE, k3);
+
+      // апскейл до повного
+      let maskBig = new cv.Mat();
+      cv.resize(maskSmall, maskBig, new cv.Size(W,H), 0, 0, cv.INTER_NEAREST);
+
+      // фільтр по площі
+      const area = cv.countNonZero(maskBig);
+      if(area < (W*H*0.01)){ // відсікаємо надто малі
+        maskSmall.delete(); k3.delete(); maskBig.delete(); continue;
+      }
+
+      // знайдемо контур для підсвічування
+      let contours = new cv.MatVector();
+      let hierarchy = new cv.Mat();
+      cv.findContours(maskBig, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      if(contours.size()===0){
+        maskSmall.delete(); k3.delete(); maskBig.delete(); contours.delete(); hierarchy.delete();
+        continue;
+      }
+
+      // збережемо маску як canvas
+      const mCanvas = document.createElement('canvas'); mCanvas.width=W; mCanvas.height=H;
+      const mCtx = mCanvas.getContext('2d');
+      const id = mCtx.createImageData(W,H);
+      for(let y=0;y<H;y++){
+        for(let x=0;x<W;x++){
+          const idx = (y*W + x)*4;
+          const v = maskBig.ucharPtr(y,x)[0];
+          id.data[idx]=255; id.data[idx+1]=255; id.data[idx+2]=255; id.data[idx+3]=v>0?255:0;
+        }
+      }
+      mCtx.putImageData(id,0,0);
+
+      // створимо Path2D з найбільшого контуру
+      let maxA=0, best=null;
+      for(let ci=0; ci<contours.size(); ci++){
+        const cnt = contours.get(ci);
+        const a = cv.contourArea(cnt);
+        if(a>maxA){ maxA=a; best=cnt; }
+      }
+      let path = null;
+      if(best){
+        path = new Path2D();
+        for(let i=0;i<best.data32S.length;i+=2){
+          const x = best.data32S[i], y = best.data32S[i+1];
+          if(i===0) path.moveTo(x,y); else path.lineTo(x,y);
+        }
+        path.closePath();
+      }
+
+      autoRegions.push({ maskCanvas: mCanvas, contourPath: path });
+
+      maskSmall.delete(); k3.delete(); maskBig.delete(); contours.delete(); hierarchy.delete();
+    }
+
+    // прибирання
+    centers.delete(); labels.delete(); samples.delete(); lab.delete(); src.delete(); srcFull.delete();
+  }
+
+  // клік по автосегменту
+  function pickAutoRegionAt(x,y){
+    for(const r of autoRegions){
+      if(!r.maskCanvas) continue;
+      const m = r.maskCanvas.getContext('2d').getImageData(x,y,1,1);
+      if(m.data[3] > 0) return r;
+    }
+    return null;
+  }
+
+  function applyRegionToMask(regionCanvas){
+    const w=mask.width, h=mask.height;
+    const src = regionCanvas.getContext('2d').getImageData(0,0,w,h);
+    const out = mctx.createImageData(w,h);
+    for(let i=0;i<src.data.length;i+=4){
+      const a = src.data[i+3];
+      out.data[i]=255; out.data[i+1]=255; out.data[i+2]=255; out.data[i+3]=a>0?255:0;
+    }
+    mctx.putImageData(out,0,0);
+  }
+
   // ===== Рендерінг накладки =====
   function hexToRgb(hex){ const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return m?{r:parseInt(m[1],16),g:parseInt(m[2],16),b:parseInt(m[3],16)}:{r:200,g:0,b:0} }
+
+  function clipByAlphaAndDraw(maskImgData, sourceCanvas, destCtx){
+    const w=sourceCanvas.width, h=sourceCanvas.height;
+    const tmp=document.createElement('canvas'); tmp.width=w; tmp.height=h;
+    const tctx=tmp.getContext('2d');
+    tctx.drawImage(sourceCanvas,0,0);
+    const alphaCanvas=document.createElement('canvas'); alphaCanvas.width=w; alphaCanvas.height=h;
+    const actx=alphaCanvas.getContext('2d');
+    const aimg=actx.createImageData(w,h);
+    for(let i=0;i<aimg.data.length;i+=4){
+      aimg.data[i]=0; aimg.data[i+1]=0; aimg.data[i+2]=0; aimg.data[i+3]=maskImgData.data[i+3];
+    }
+    actx.putImageData(aimg,0,0);
+    tctx.globalCompositeOperation="destination-in";
+    tctx.drawImage(alphaCanvas,0,0);
+    tctx.globalCompositeOperation="source-over";
+    destCtx.drawImage(tmp,0,0);
+  }
+
+  function makeStitches(w,h, style){
+    const c=document.createElement('canvas'); c.width=w;c.height=h; const ctx=c.getContext('2d');
+    if(style==='diamonds'){
+      const step=40; ctx.lineWidth=1;
+      ctx.strokeStyle="rgba(255,255,255,0.38)";
+      for(let i=-h;i<w+h;i+=step){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i-h,h); ctx.stroke(); }
+      ctx.strokeStyle="rgba(0,0,0,0.45)";
+      for(let i=0;i<w+h;i+=step){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i+h,h); ctx.stroke(); }
+    }else if(style==='parallel'){
+      const step=28; ctx.lineWidth=1.2;
+      ctx.strokeStyle="rgba(255,255,255,0.38)";
+      for(let y=12;y<h;y+=step){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+      ctx.strokeStyle="rgba(0,0,0,0.38)";
+      for(let y=12;y<h;y+=step){ ctx.beginPath(); ctx.moveTo(0,y+3); ctx.lineTo(w,y+3); ctx.stroke(); }
+    }else if(style==='waves'){
+      ctx.strokeStyle="rgba(255,255,255,0.35)"; ctx.lineWidth=1.2;
+      for(let y=20;y<h;y+=36){
+        ctx.beginPath();
+        for(let x=0;x<=w;x+=8){
+          const yy = y + Math.sin(x/28)*6;
+          if(x===0) ctx.moveTo(x,yy); else ctx.lineTo(x,yy);
+        }
+        ctx.stroke();
+      }
+      ctx.strokeStyle="rgba(0,0,0,0.35)";
+      for(let y=20;y<h;y+=36){
+        ctx.beginPath();
+        for(let x=0;x<=w;x+=8){
+          const yy = y + 3 + Math.sin(x/28)*6;
+          if(x===0) ctx.moveTo(x,yy); else ctx.lineTo(x,yy);
+        }
+        ctx.stroke();
+      }
+    }
+    return c;
+  }
 
   function drawPreview(){
     if(!hasImage){ rctx.clearRect(0,0,render.width,render.height); return; }
@@ -446,7 +673,7 @@
     const overlay=rctx.createImageData(w,h);
 
     const col=hexToRgb(color.value);
-    const mixK=0.65; // постійна “насиченість” кольору
+    const mixK=0.65;
 
     // 1) колір у межах маски
     for(let i=0;i<overlay.data.length;i+=4){
@@ -463,26 +690,22 @@
     }
     rctx.putImageData(overlay,0,0);
 
-    // 2) матеріал (текстура) у межах маски — легка
+    // 2) матеріал
     const tex=makeMaterialTexture(w,h, material.value);
     rctx.globalAlpha=0.18;
     clipByAlphaAndDraw(mimg, tex, rctx);
     rctx.globalAlpha=1;
 
-    // 3) перфорація (за потреби)
+    // 3) перфорація
     if(perforated.checked){
       const perf=makePerforation(w,h);
-      rctx.globalAlpha=1;
       clipByAlphaAndDraw(mimg, perf, rctx);
     }
 
-    // 4) строчки з модалки (якщо були згенеровані)
-    if(overlayStitches){
-      rctx.globalAlpha=1;
-      clipByAlphaAndDraw(mimg, overlayStitches, rctx);
-    }
+    // 4) строчки (якщо згенеровані)
+    if(overlayStitches){ clipByAlphaAndDraw(mimg, overlayStitches, rctx); }
 
-    // 5) напівпрозора синя підсвітка маски (опція)
+    // 5) синя підсвітка вручну
     if(showMask.checked){
       const blue=rctx.createImageData(w,h);
       for(let i=0;i<blue.data.length;i+=4){
@@ -491,28 +714,18 @@
       }
       rctx.putImageData(blue,0,0);
     }
-  }
 
-  function clipByAlphaAndDraw(maskImgData, sourceCanvas, destCtx){
-    // Малюємо sourceCanvas лише там, де у масці альфа > 0
-    const w=sourceCanvas.width, h=sourceCanvas.height;
-    const tmp=document.createElement('canvas'); tmp.width=w; tmp.height=h;
-    const tctx=tmp.getContext('2d');
-    // 1) намалювати джерело
-    tctx.drawImage(sourceCanvas,0,0);
-    // 2) застосувати альфу з маски (destination-in)
-    const alphaCanvas=document.createElement('canvas'); alphaCanvas.width=w; alphaCanvas.height=h;
-    const actx=alphaCanvas.getContext('2d');
-    const aimg=actx.createImageData(w,h);
-    for(let i=0;i<aimg.data.length;i+=4){
-      aimg.data[i]=0; aimg.data[i+1]=0; aimg.data[i+2]=0; aimg.data[i+3]=maskImgData.data[i+3];
+    // 6) якщо є авто-регіони — намалюємо їх контури (пунктиром)
+    if(autoRegions.length){
+      rctx.save();
+      rctx.lineWidth = 2;
+      rctx.setLineDash([8,6]);
+      rctx.strokeStyle = "rgba(255,122,0,0.9)";
+      for(const r of autoRegions){
+        if(r.contourPath) rctx.stroke(r.contourPath);
+      }
+      rctx.restore();
     }
-    actx.putImageData(aimg,0,0);
-    tctx.globalCompositeOperation="destination-in";
-    tctx.drawImage(alphaCanvas,0,0);
-    tctx.globalCompositeOperation="source-over";
-    // 3) накласти у результат
-    destCtx.drawImage(tmp,0,0);
   }
 
   // Живе прев’ю
