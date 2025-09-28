@@ -26,7 +26,7 @@
       position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;
       overflow:hidden;border:2px solid var(--accent);touch-action:none;
     }
-    /* Точний прямокутник відображеного фото */
+    /* Точний прямокутник відображеного фото всередині viewer */
     .frame{position:absolute;left:0;top:0;width:100%;height:100%}
     .layer{position:absolute;left:0;top:0;width:100%;height:100%}
     #photo{display:block;width:100%;height:100%}
@@ -50,8 +50,11 @@
         <button id="resetBtn"  class="btn">Скинути налаштування</button>
         <button id="clearMask" class="btn ghost">Очистити виділення</button>
         <button id="refineBtn" class="btn">Уточнити маску (Auto)</button>
+        <button id="smartBtn"  class="btn">Розумно: схожі</button>
       </div>
+
       <hr class="divider">
+
       <div class="row">
         <span class="label">Колір:</span>
         <input type="color" id="colorPick" value="#ff6600"/>
@@ -67,7 +70,9 @@
           <span class="label">Показати маску</span>
         </label>
       </div>
+
       <hr class="divider">
+
       <div class="row">
         <div class="mode">
           <label class="label"><input type="radio" name="tool" value="brush" checked> Пензлик</label>
@@ -77,7 +82,7 @@
         <input type="range" id="brushSize" min="5" max="160" value="36"/>
         <span id="brushVal" class="label">36 px</span>
       </div>
-      <div class="hint">Намалюй усередині деталі (не по краю). Потім натисни «Уточнити маску (Auto)» — краї стануть чіткими.</div>
+      <div class="hint">Намалюй усередині деталі (не по краю). Далі: «Уточнити маску (Auto)», потім «Розумно: схожі».</div>
     </div>
 
     <div class="viewer" id="viewer">
@@ -91,13 +96,14 @@
   </div>
 
   <script>
-    const API_URL = "https://car-color-api.onrender.com"; // ← твій бекенд без /refine
+    const API_URL = "https://car-color-api.onrender.com"; // ← заміни на свій URL без /refine
 
     // Елементи
     const fileInput = document.getElementById('fileInput');
     const resetBtn = document.getElementById('resetBtn');
     const clearMaskBtn = document.getElementById('clearMask');
     const refineBtn = document.getElementById('refineBtn');
+    const smartBtn  = document.getElementById('smartBtn');
 
     const colorPick = document.getElementById('colorPick');
     const strength = document.getElementById('strength');
@@ -132,7 +138,7 @@
       r.readAsDataURL(f);
     });
 
-    // Геометрія "contain": розміщуємо реальний прямокутник фото у viewer
+    // Геометрія "contain": прямокутник фото у viewer
     function layoutToImage(){
       const vw = viewer.clientWidth, vh = viewer.clientHeight;
       const iw = photo.naturalWidth, ih = photo.naturalHeight;
@@ -179,8 +185,9 @@
       ctx.lineWidth = Number(brushSize.value);
       ctx.globalCompositeOperation = (tool==='brush') ? 'source-over' : 'destination-out';
       const p=getPos(e);
-      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+0.01,p.y+0.01); ctx.strokeStyle = (tool==='brush')?'white':'rgba(0,0,0,1)'; ctx.stroke();
-      updateCssMask();
+      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+0.01,p.y+0.01);
+      ctx.strokeStyle = (tool==='brush') ? 'white' : 'rgba(0,0,0,1)';
+      ctx.stroke(); updateCssMask();
     };
     const move = (e)=>{
       if(!drawing || !hasImage) return;
@@ -195,7 +202,7 @@
     frame.addEventListener('touchmove',  (e)=>{ e.preventDefault(); move(e);  }, {passive:false});
     window.addEventListener('touchend', end);
 
-    // Застосувати маску як CSS mask
+    // CSS-маска поверх кольорових шарів
     function updateCssMask(){
       const url = maskCanvas.toDataURL('image/png');
       [tint, shadow].forEach(el=>{
@@ -216,14 +223,14 @@
       clearMask(); tint.style.opacity="0"; shadow.style.opacity="0";
     });
 
-    // ---- Автоуточнення через бекенд + альфа-прозорість ----
+    // ---- УТОЧНЕННЯ (/refine) з ROI + прозорістю ----
     async function refineMaskOnServer(){
       if(!hasImage){ alert("Завантаж фото спочатку."); return; }
 
       const photoBlob = await (await fetch(photo.src)).blob();
       const maskBlob  = await (await fetch(maskCanvas.toDataURL("image/png"))).blob();
 
-      // ROI з намальованої маски
+      // ROI з маски у координатах frame
       const r = ctx.getImageData(0,0,maskCanvas.width,maskCanvas.height).data;
       let minX=Infinity,minY=Infinity,maxX=-1,maxY=-1;
       for(let i=0;i<r.length;i+=4){
@@ -252,23 +259,23 @@
 
         const img = new Image();
         img.onload = () => {
-          // 1) Малюємо відповідь у тимчасовий canvas розміру frame
+          // Малюємо відповідь у тимчасове полотно розміру frame
           const tc = document.createElement('canvas');
           tc.width = maskCanvas.width; tc.height = maskCanvas.height;
           const tctx = tc.getContext('2d');
           tctx.drawImage(img, 0, 0, tc.width, tc.height);
 
-          // 2) Робимо чорне прозорим, біле — непрозорим
+          // Чорне -> прозоро, біле -> непрозоро
           const id = tctx.getImageData(0,0,tc.width,tc.height);
           const p = id.data;
           for(let i=0;i<p.length;i+=4){
-            const v = p[i]; // інтенсивність (red)
-            if (v > 127) { p[i]=p[i+1]=p[i+2]=255; p[i+3]=255; }  // всередині маски
-            else         { p[i]=p[i+1]=p[i+2]=255; p[i+3]=0;   }  // зовні — прозоро
+            const v = p[i];
+            if (v > 127) { p[i]=p[i+1]=p[i+2]=255; p[i+3]=255; }
+            else         { p[i]=p[i+1]=p[i+2]=255; p[i+3]=0;   }
           }
           tctx.putImageData(id,0,0);
 
-          // 3) Копіюємо в нашу маску і оновлюємо CSS
+          // Копіюємо в основну маску
           ctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
           ctx.drawImage(tc,0,0);
           updateCssMask();
@@ -284,6 +291,57 @@
     }
     refineBtn.addEventListener('click', refineMaskOnServer);
 
+    // ---- РОЗУМНО: СХОЖІ (/grow_similar) + прозорість ----
+    async function growSimilarOnServer(){
+      if(!hasImage){ alert("Завантаж фото спочатку."); return; }
+
+      const photoBlob = await (await fetch(photo.src)).blob();
+      const maskBlob  = await (await fetch(maskCanvas.toDataURL("image/png"))).blob();
+
+      const fd = new FormData();
+      fd.append("image", photoBlob, "image.png");
+      fd.append("mask",  maskBlob,  "mask.png");
+      // (опційно) параметри: add_mirror, segments, thresh…
+
+      smartBtn.disabled = true; smartBtn.textContent = "Шукаю схожі...";
+      try{
+        const res = await fetch(API_URL + "/grow_similar", { method:"POST", body: fd });
+        if(!res.ok) throw new Error("Server error");
+        const data = await res.json();
+
+        const img = new Image();
+        img.onload = () => {
+          // Переклад у прозору маску
+          const tc = document.createElement('canvas');
+          tc.width = maskCanvas.width; tc.height = maskCanvas.height;
+          const tctx = tc.getContext('2d');
+          tctx.drawImage(img, 0, 0, tc.width, tc.height);
+          const id = tctx.getImageData(0,0,tc.width,tc.height);
+          const p  = id.data;
+          for(let i=0;i<p.length;i+=4){
+            const v = p[i];
+            if (v > 127) { p[i]=p[i+1]=p[i+2]=255; p[i+3]=255; }
+            else         { p[i]=p[i+1]=p[i+2]=255; p[i+3]=0;   }
+          }
+          tctx.putImageData(id,0,0);
+
+          // Додаємо до існуючої маски (об'єднання)
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.drawImage(tc, 0, 0, maskCanvas.width, maskCanvas.height);
+          updateCssMask();
+
+          smartBtn.disabled = false; smartBtn.textContent = "Розумно: схожі";
+        };
+        img.src = "data:image/png;base64," + data.mask_png_base64;
+      }catch(e){
+        console.error(e);
+        alert("Не вдалося знайти схожі. Перевір API_URL.");
+        smartBtn.disabled = false; smartBtn.textContent = "Розумно: схожі";
+      }
+    }
+    smartBtn.addEventListener('click', growSimilarOnServer);
+
+    // Перерахунок при ресайзі
     window.addEventListener('resize', ()=>{ if(hasImage) layoutToImage(); });
   </script>
 </body>
