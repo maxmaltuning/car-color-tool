@@ -547,5 +547,31 @@ PALETTE.forEach(c=>{
   console.log("AI-seg module: ready (non-destructive).");
 })();
 </script>
+  <style>
+  /* якщо ці стилі вже є — дубль не завадить */
+  #aiMaskCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;   /* увімкнемо в коді, коли треба малювати */
+    opacity: .35;           /* напівпрозорий перегляд */
+    mix-blend-mode: multiply;
+    z-index: 9;             /* ПОВЕРХ фото/канвасу */
+  }
+  .ai-wrap {
+    position: relative;
+    display: inline-block;
+  }
+  .ai-badge {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    background: rgba(255,140,0,.95);
+    color: #000; font: 600 12px/1.2 system-ui, -apple-system, Arial;
+    padding: 6px 10px; border-radius: 10px;
+    z-index: 10; display:none;
+  }
+</style>
 </body>
 </html>
