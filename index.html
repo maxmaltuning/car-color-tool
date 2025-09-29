@@ -573,5 +573,192 @@ PALETTE.forEach(c=>{
     z-index: 10; display:none;
   }
 </style>
+  <script>
+(() => {
+  const API_URL = "https://car-color-api.onrender.com"; // ← твій бекенд
+  const AUTO_BTN_TEXT = "Авто-розпізнавання";
+  const DONE_BTN_TEXT = "Готово";
+
+  // 0) Знаходимо ваш головний canvas з фото (НЕ створюємо нове фото, не дублюємо)
+  // Якщо у вас їх кілька — візьмемо перший видимий.
+  const baseCanvas = Array.from(document.querySelectorAll('canvas'))
+    .find(c => c.offsetParent !== null);
+  if (!baseCanvas) { console.warn('[AI] base canvas not found'); return; }
+
+  // 1) Обгортаємо ТІЛЬКИ якщо ще не обгорнуто
+  let wrap = baseCanvas.closest('.ai-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.className = 'ai-wrap';
+    baseCanvas.parentNode.insertBefore(wrap, baseCanvas);
+    wrap.appendChild(baseCanvas);
+  }
+
+  // 2) Додаємо ПОВЕРХ один-єдиний шар маски, якщо ще не доданий
+  let maskCanvas = document.getElementById('aiMaskCanvas');
+  if (!maskCanvas) {
+    maskCanvas = document.createElement('canvas');
+    maskCanvas.id = 'aiMaskCanvas';
+    maskCanvas.width  = baseCanvas.width;
+    maskCanvas.height = baseCanvas.height;
+    wrap.appendChild(maskCanvas);
+  }
+  const mctx = maskCanvas.getContext('2d');
+
+  // 3) Значок-статус (не заважає макету)
+  let badge = wrap.querySelector('.ai-badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.className = 'ai-badge';
+    wrap.appendChild(badge);
+  }
+  const showBadge = t => { badge.textContent = t; badge.style.display = 'block'; }
+  const hideBadge = () => { badge.style.display = 'none'; }
+
+  // 4) Чернеткова кісточка (малювання тільки в авто-режимі)
+  let autoMode = false;
+  let drawing = false;
+  let brushRadius = 18;
+  let erase = false; // якщо хочеш гумку — можеш десь перемикати це на true
+
+  function enablePaint()  { maskCanvas.style.pointerEvents = 'auto'; }
+  function disablePaint() { maskCanvas.style.pointerEvents = 'none'; drawing=false; }
+
+  maskCanvas.addEventListener('mousedown', e => {
+    if (!autoMode) return;
+    drawing = true;
+    mctx.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+    mctx.fillStyle = '#fff';
+    dot(e.offsetX, e.offsetY);
+  });
+  maskCanvas.addEventListener('mousemove', e => {
+    if (!autoMode || !drawing) return;
+    mctx.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+    dot(e.offsetX, e.offsetY);
+  });
+  window.addEventListener('mouseup', ()=> drawing = false);
+
+  function dot(x,y){
+    mctx.beginPath();
+    mctx.arc(x, y, brushRadius, 0, Math.PI*2);
+    mctx.fill();
+  }
+
+  // 5) Допоміжні
+  function clearMask() { mctx.clearRect(0,0,maskCanvas.width,maskCanvas.height); }
+  function canvasToBlob(c) { return new Promise(r => c.toBlob(r, 'image/png', 0.95)); }
+  function dataURLToBlob(url) {
+    const [meta, b64] = url.split(',');
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+    const mime = (meta.match(/data:(.*);base64/)||[])[1] || 'image/png';
+    return new Blob([arr], {type: mime});
+  }
+
+  // 6) Авто-кнопка та “Готово”
+  // НІЧОГО не видаляємо: слухаємо існуючі кнопки за текстом;
+  // якщо їх немає — тихо додаємо в першу .toolbar
+  function ensureButton(text, onClick){
+    let btn = Array.from(document.querySelectorAll('button'))
+      .find(b => (b.textContent||'').trim() === text);
+    if (!btn) {
+      const host = document.querySelector('.toolbar') || wrap;
+      btn = document.createElement('button');
+      btn.textContent = text;
+      btn.style.margin = '0 8px 8px 0';
+      btn.className = 'btn';
+      host.prepend(btn);
+    }
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  ensureButton(AUTO_BTN_TEXT, () => {
+    autoMode = true;
+    enablePaint();
+    showBadge('Авто-режим: помалюй кісточкою по елементу');
+  });
+
+  ensureButton(DONE_BTN_TEXT, async () => {
+    if (!autoMode) return; // ігноруємо, якщо не в авто-режимі
+    try {
+      showBadge('Відправляю в AI…');
+
+      // a) ОТРИМАЄМО PNG фото з базового canvas
+      //    Якщо у вас рендер не напряму, можеш замінити на свій source:
+      const baseDataUrl = baseCanvas.toDataURL('image/png');
+      const photoBlob = dataURLToBlob(baseDataUrl);
+
+      // b) БІНАРИЗУЄМО маску (робимо справді біло/чорну без прозорості),
+      //    і шлемо як МОЖЛИВОСТІ /refine (multipart, як очікує бекенд FastAPI)
+      const bin = document.createElement('canvas');
+      bin.width = maskCanvas.width; bin.height = maskCanvas.height;
+      const bctx = bin.getContext('2d');
+      bctx.drawImage(maskCanvas, 0,0);
+      const id = bctx.getImageData(0,0,bin.width,bin.height);
+      const p = id.data;
+      for (let i=0;i<p.length;i+=4){
+        const a = p[i+3];
+        if (a>10){ p[i]=255; p[i+1]=255; p[i+2]=255; p[i+3]=255; }
+        else     { p[i]=0;   p[i+1]=0;   p[i+2]=0;   p[i+3]=255; }
+      }
+      bctx.putImageData(id,0,0);
+      const maskBlob = await canvasToBlob(bin);
+
+      const fd = new FormData();
+      fd.append('image', photoBlob, 'photo.png');
+      fd.append('mask',  maskBlob,  'rough_mask.png');
+
+      const res = await fetch(`${API_URL}/refine`, { method:'POST', body: fd });
+      if (!res.ok) {
+        const t = await res.text();
+        showBadge('Помилка бекенду');
+        console.error('[AI] /refine error:', res.status, t);
+        return;
+      }
+      const data = await res.json();
+
+      // підтримуємо кілька назв поля: mask_png_base64 або mask_png_b64 або output[0]
+      let b64 = data.mask_png_base64 || data.mask_png_b64 ||
+                (Array.isArray(data.output) ? data.output[0] : null);
+
+      if (!b64) {
+        showBadge('AI: порожня маска');
+        console.warn('[AI] unexpected response:', data);
+        return;
+      }
+      if (!b64.startsWith('data:')) b64 = 'data:image/png;base64,' + b64;
+
+      // c) Малюємо отриману УТОЧНЕНУ маску поверх (напівпрозоро)
+      const img = new Image();
+      img.onload = () => {
+        mctx.clearRect(0,0,maskCanvas.width,maskCanvas.height);
+        mctx.drawImage(img, 0,0,maskCanvas.width,maskCanvas.height);
+        showBadge('AI уточнив маску');
+        setTimeout(hideBadge, 1200);
+      };
+      img.src = b64;
+
+    } catch (e) {
+      console.error(e);
+      showBadge('AI: мережна помилка');
+    } finally {
+      // Виходимо з авто-режиму, але НІЧОГО не видаляємо з вашого сайту
+      autoMode = false;
+      disablePaint();
+    }
+  });
+
+  // 7) Синхронізуємо розміри при зміні вашого базового canvas
+  const ro = new ResizeObserver(()=> {
+    maskCanvas.width  = baseCanvas.width;
+    maskCanvas.height = baseCanvas.height;
+  });
+  ro.observe(baseCanvas);
+
+  console.log('[AI] overlay ready — без видалень, лише додано');
+})();
+</script>
 </body>
 </html>
